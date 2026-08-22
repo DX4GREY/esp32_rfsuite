@@ -1,200 +1,253 @@
--- Sokoban for the 152x86 Lua GUI canvas.
--- UP=up, DOWN=down, A=right, B=left.
--- Grid: 15 cols, 8 rows. Cell size: 10px. Offset to center slightly.
+-- Sokoban: 10 fixed levels, optimized for the Lua instruction limit.
+-- UP/DOWN move vertically, B/A move left/right, A+B returns to the list.
 
-local cols, rows, cell = 15, 8, 10
-local offsetX, offsetY = 1, 3
+local COLS, ROWS, CELL = 15, 8, 10
+local OX, OY = 1, 3
+local EMPTY, WALL, TARGET, BOX, BOX_TARGET = 0, 1, 2, 3, 4
+local PLAY, WIN, COMPLETE = 1, 2, 3
+local MAX_TICKS = 1200
 
--- Game states
-local STATE_PLAY = 1
-local STATE_WIN = 2
-local current_state = STATE_PLAY
-local MAX_GAME_MS = 180000 -- End cleanly after three minutes.
-
--- Level definition (0: empty, 1: wall, 2: target, 3: box, 4: box on target, 5: player)
--- A simple small level for demonstration
-local initial_map = {
-    {0,0,1,1,1,1,1,0,0,0,0,0,0,0,0},
-    {0,0,1,2,5,0,1,0,0,0,0,0,0,0,0},
-    {0,0,1,0,3,0,1,0,1,1,1,0,0,0,0},
-    {0,1,1,1,0,0,1,0,1,2,1,0,0,0,0},
-    {0,1,2,1,0,3,1,1,1,0,1,0,0,0,0},
-    {0,1,0,1,0,0,0,0,0,0,1,0,0,0,0},
-    {0,1,3,0,0,1,1,1,1,1,1,0,0,0,0},
-    {0,1,1,1,1,1,0,0,0,0,0,0,0,0,0}
+-- Every row is exactly 15 characters. Legend: # wall, . target,
+-- $ box, * box on target, @ player.
+local levels = {
+    {
+        "  #######      ",
+        "  #  .  #      ",
+        "  #  $  #      ",
+        "  #  @  #      ",
+        "  #     #      ",
+        "  #######      ",
+        "               ",
+        "               "
+    },
+    {
+        " #########     ",
+        " # .   . #     ",
+        " # $   $ #     ",
+        " #   @   #     ",
+        " #       #     ",
+        " #########     ",
+        "               ",
+        "               "
+    },
+    {
+        " #########     ",
+        " # . . . #     ",
+        " # $ $ $ #     ",
+        " #       #     ",
+        " #   @   #     ",
+        " #########     ",
+        "               ",
+        "               "
+    },
+    {
+        "  #########    ",
+        "  # . .   #    ",
+        "  # $ $   #    ",
+        "  #   #   #    ",
+        "  #   @   #    ",
+        "  #########    ",
+        "               ",
+        "               "
+    },
+    {
+        " ##########    ",
+        " #  . .   #    ",
+        " #  $ $   #    ",
+        " #        #    ",
+        " # #  @   #    ",
+        " ##########    ",
+        "               ",
+        "               "
+    },
+    {
+        " ###########   ",
+        " # . . .   #   ",
+        " # $ $ $   #   ",
+        " #     #   #   ",
+        " #   @     #   ",
+        " ###########   ",
+        "               ",
+        "               "
+    },
+    {
+        "  #########    ",
+        "  # . . . #    ",
+        "  # $ $ $ #    ",
+        "  #   #   #    ",
+        "  #   @   #    ",
+        "  #       #    ",
+        "  #########    ",
+        "               "
+    },
+    {
+        "  #########    ",
+        "  # .   . #    ",
+        "  # $ # $ #    ",
+        "  #   #   #    ",
+        "  #   @   #    ",
+        "  #########    ",
+        "               ",
+        "               "
+    },
+    {
+        " ###########   ",
+        " # . . . . #   ",
+        " # $ $ $ $ #   ",
+        " #         #   ",
+        " #  ##     #   ",
+        " #    @    #   ",
+        " ###########   ",
+        "               "
+    },
+    {
+        "###############",
+        "# . . . . .   #",
+        "# $ $ $ $ $   #",
+        "#             #",
+        "#   ###       #",
+        "#      @      #",
+        "#             #",
+        "###############"
+    }
 }
 
 local map = {}
-local player = {x = 0, y = 0}
+local player = {x=1, y=1}
+local level_index, boxes_remaining, state = 1, 0, PLAY
 
--- Copy initial map to working map and find player
-local function load_level()
-    map = {}
-    for y = 1, rows do
+local function inside(x, y)
+    return x >= 1 and x <= COLS and y >= 1 and y <= ROWS
+end
+
+local function rect_cell(x, y, color, solid)
+    rf.gui_rect(OX+(x-1)*CELL, OY+(y-1)*CELL, CELL-1, CELL-1, color, solid)
+end
+
+-- Redraw only one cell. Movement therefore costs a constant amount of work.
+local function draw_tile(x, y, show_player)
+    rect_cell(x, y, "black", true)
+    local v = map[y][x]
+    if v == WALL then
+        rect_cell(x, y, "green", false)
+    elseif v == TARGET then
+        rect_cell(x, y, "yellow", false)
+    elseif v == BOX then
+        rect_cell(x, y, "accent", true)
+    elseif v == BOX_TARGET then
+        rect_cell(x, y, "yellow", true)
+    end
+    if show_player then rect_cell(x, y, "red", true) end
+end
+
+local function draw_board()
+    rf.gui_clear()
+    for y=1,ROWS do
+        for x=1,COLS do
+            if map[y][x] ~= EMPTY then draw_tile(x, y, false) end
+        end
+    end
+    draw_tile(player.x, player.y, true)
+end
+
+local function load_level(index)
+    level_index, boxes_remaining, state = index, 0, PLAY
+    for y=1,ROWS do
         map[y] = {}
-        for x = 1, cols do
-            map[y][x] = initial_map[y][x]
-            if map[y][x] == 5 then
-                player.x = x
-                player.y = y
-                map[y][x] = 0 -- Player is stored separately, remove from static map
-            end
+        local row = levels[index][y]
+        for x=1,COLS do
+            local c = string.sub(row, x, x)
+            local v = EMPTY
+            if c == "#" then v = WALL
+            elseif c == "." then v = TARGET
+            elseif c == "$" then v = BOX; boxes_remaining = boxes_remaining + 1
+            elseif c == "*" then v = BOX_TARGET
+            elseif c == "@" then player.x, player.y = x, y end
+            map[y][x] = v
         end
     end
-    current_state = STATE_PLAY
+    rf.gui_footer("B LEFT", "L"..index.."/10", "A RIGHT")
+    draw_board()
 end
 
-local function draw_cell(x, y, color, solid)
-    rf.gui_rect(offsetX + (x-1) * cell, offsetY + (y-1) * cell, cell - 1, cell - 1, color, solid)
-end
+local function move(dx, dy)
+    local ox, oy = player.x, player.y
+    local tx, ty = ox+dx, oy+dy
+    if not inside(tx, ty) or map[ty][tx] == WALL then return end
+    local v = map[ty][tx]
 
-local function check_win()
-    for y = 1, rows do
-        for x = 1, cols do
-            if map[y][x] == 3 then -- Jika masih ada kotak yang belum di target
-                return false
-            end
-        end
-    end
-    return true
-end
-
-local function move_player(dx, dy)
-    local target_x = player.x + dx
-    local target_y = player.y + dy
-    
-    -- Check boundaries (meskipun dinding biasanya melindungi)
-    if target_x < 1 or target_x > cols or target_y < 1 or target_y > rows then return false end
-
-    local target_cell = map[target_y][target_x]
-
-    -- Hit a wall
-    if target_cell == 1 then return false end
-
-    -- Empty or Target
-    if target_cell == 0 or target_cell == 2 then
-        player.x = target_x
-        player.y = target_y
-        return true
+    if v == EMPTY or v == TARGET then
+        player.x, player.y = tx, ty
+        draw_tile(ox, oy, false)
+        draw_tile(tx, ty, true)
+        return
     end
 
-    -- Hit a box (3) or box on target (4)
-    if target_cell == 3 or target_cell == 4 then
-        local beyond_x = target_x + dx
-        local beyond_y = target_y + dy
-        
-        if beyond_x < 1 or beyond_x > cols or beyond_y < 1 or beyond_y > rows then return false end
-        
-        local beyond_cell = map[beyond_y][beyond_x]
+    if v ~= BOX and v ~= BOX_TARGET then return end
+    local bx, by = tx+dx, ty+dy
+    if not inside(bx, by) then return end
+    local beyond = map[by][bx]
+    if beyond ~= EMPTY and beyond ~= TARGET then return end
 
-        -- Can we push the box? (Beyond cell must be empty or target)
-        if beyond_cell == 0 or beyond_cell == 2 then
-            -- Move the box
-            if target_cell == 3 then map[target_y][target_x] = 0
-            else map[target_y][target_x] = 2 end -- was on target, leave target behind
+    -- Update the remaining-box counter instead of scanning all 120 cells.
+    if v == BOX_TARGET then boxes_remaining = boxes_remaining + 1 end
+    if beyond == TARGET then boxes_remaining = boxes_remaining - 1 end
+    map[ty][tx] = (v == BOX_TARGET) and TARGET or EMPTY
+    map[by][bx] = (beyond == TARGET) and BOX_TARGET or BOX
+    player.x, player.y = tx, ty
+    draw_tile(ox, oy, false)
+    draw_tile(tx, ty, true)
+    draw_tile(bx, by, false)
 
-            if beyond_cell == 0 then map[beyond_y][beyond_x] = 3
-            else map[beyond_y][beyond_x] = 4 end -- pushed onto target
-
-            -- Move player
-            player.x = target_x
-            player.y = target_y
-            
-            if check_win() then
-                current_state = STATE_WIN
-            end
-            return true
-        end
+    if boxes_remaining == 0 then
+        state = WIN
+        rf.gui_footer("A+B EXIT", "CLEAR!", "A NEXT")
     end
-
-    return false
 end
 
-local function draw_level()
+local function show_complete()
+    state = COMPLETE
     rf.gui_clear()
-
-    for y = 1, rows do
-        for x = 1, cols do
-            local val = map[y][x]
-            if val == 1 then draw_cell(x, y, "green", false)
-            elseif val == 2 then draw_cell(x, y, "yellow", false)
-            elseif val == 3 then draw_cell(x, y, "accent", true)
-            elseif val == 4 then draw_cell(x, y, "yellow", true)
-            end
-        end
-    end
-
-    draw_cell(player.x, player.y, "red", true)
+    rf.gui_text(32, 20, "ALL LEVELS", "yellow")
+    rf.gui_text(43, 36, "CLEAR!", "green")
+    rf.gui_text(24, 56, "A = PLAY AGAIN", "accent")
+    rf.gui_footer("A+B EXIT", "10/10", "A REPLAY")
 end
-
-local function draw_win()
-    rf.gui_clear()
-    rf.gui_text(40, 30, "LEVEL CLEAR!", "yellow")
-    rf.gui_text(35, 50, "A to Restart", "accent")
-end
-
--- Initialize game
-load_level()
 
 rf.gui_begin("SOKOBAN")
-rf.gui_footer("B LEFT", "U/D", "A RIGHT")
+load_level(1)
 
--- Variabel untuk mencegah input berulang terlalu cepat (simple debounce)
-local wait_release = false
-local needs_redraw = true
-local running = true
-local started_at = rf.millis()
-
-while running and rf.millis() - started_at < MAX_GAME_MS do
+local running, held, ticks = true, false, 0
+while running and ticks < MAX_TICKS do
     local up = rf.button("up")
     local down = rf.button("down")
     local left = rf.button("b")
     local right = rf.button("a")
     local pressed = up or down or left or right
 
-    -- A+B is reserved as an explicit escape gesture. A finite session also
-    -- guarantees that this interactive script cannot consume the VM budget
-    -- forever when the device is left unattended.
     if left and right then
         rf.gui_close()
         running = false
-    elseif current_state == STATE_PLAY then
-        -- Handle Input (Penting: Di Sokoban kita butuh penekanan tombol satu per satu, bukan menahan)
-        local dx, dy = 0, 0
-
-        if up then dy = -1
-        elseif down then dy = 1
-        elseif left then dx = -1
-        elseif right then dx = 1
+    elseif pressed and not held then
+        held = true
+        if state == PLAY then
+            if up then move(0,-1)
+            elseif down then move(0,1)
+            elseif left then move(-1,0)
+            elseif right then move(1,0) end
+        elseif right and state == WIN then
+            if level_index < #levels then load_level(level_index+1)
+            else show_complete() end
+        elseif right and state == COMPLETE then
+            load_level(1)
         end
-
-        if pressed and not wait_release then
-            if move_player(dx, dy) then needs_redraw = true end
-            wait_release = true
-        elseif not pressed then
-            wait_release = false
-        end
-    elseif current_state == STATE_WIN then
-        if right and not wait_release then
-            load_level()
-            wait_release = true
-            needs_redraw = true
-        elseif not pressed then
-            wait_release = false
-        end
+    elseif not pressed then
+        held = false
     end
 
-    if needs_redraw then
-        if current_state == STATE_WIN then draw_win()
-        else draw_level() end
-        needs_redraw = false
-    end
-
-    rf.delay(120)
+    ticks = ticks + 1
+    rf.delay(150)
 end
 
-if running then
-    rf.gui_clear()
-    rf.gui_text(35, 34, "SESSION ENDED", "yellow")
-    rf.gui_text(25, 50, "B to return", "accent")
-end
+-- A finite polling budget prevents this example from exhausting the VM quota.
+if running then rf.gui_close() end
