@@ -102,6 +102,13 @@ void DisplayManager::luaGuiBegin(const char* title) {
     drawModernFooter("B LIST", "", "A RERUN");
 }
 
+void DisplayManager::luaGuiClose() {
+    luaShowingGui = false;
+    luaShowingOutput = false;
+    luaReturnToListRequested = true;
+    needRedraw = true;
+}
+
 void DisplayManager::luaGuiFooter(const char* left, const char* middle, const char* right) {
     String l = left ? String(left) : String();
     String m = middle ? String(middle) : String();

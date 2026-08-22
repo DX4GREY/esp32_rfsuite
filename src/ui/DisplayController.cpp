@@ -557,6 +557,7 @@ void DisplayManager::processInput() {
                 luaRunStatus = luaScriptCount ? "SCRIPTS REFRESHED" : luaEngine.lastError();
             } else {
                 luaShowingGui = false;
+                luaReturnToListRequested = false;
                 luaOutputScroll = 0;
                 LuaDisplayStream output(luaOutput);
                 const bool ok = luaEngine.run(luaScripts[luaScriptSelection], output);
@@ -566,8 +567,15 @@ void DisplayManager::processInput() {
                     if (luaOutput.length() && !luaOutput.endsWith("\n")) luaOutput += "\n";
                     luaOutput += luaRunStatus;
                 }
-                if (!luaOutput.length()) luaOutput = luaRunStatus;
-                luaShowingOutput = !ok || !luaShowingGui;
+                if (luaReturnToListRequested && ok) {
+                    luaOutput = "";
+                    luaRunStatus = "";
+                    luaShowingOutput = false;
+                    luaReturnToListRequested = false;
+                } else {
+                    if (!luaOutput.length()) luaOutput = luaRunStatus;
+                    luaShowingOutput = !ok || !luaShowingGui;
+                }
             }
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {

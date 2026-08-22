@@ -102,6 +102,9 @@ function rf.gui_footer(left, middle, right) end
 ---Clear the Lua canvas without overwriting its firmware frame.
 function rf.gui_clear() end
 
+---Close the Lua GUI and return to the script list.
+function rf.gui_close() end
+
 ---Draw clipped single-line text.
 ---@param x integer
 ---@param y integer

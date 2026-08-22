@@ -60,6 +60,7 @@ LuaEngine luaEngine;
   {"name":"gui_begin","description":"Open and clear the protected 152 x 86 Lua canvas.","params":[{"name":"title","type":"string","default":"\"LUA GUI\""}]},
   {"name":"gui_footer","description":"Set the three firmware footer labels.","params":[{"name":"left","type":"string","default":"\"\""},{"name":"middle","type":"string","default":"\"\""},{"name":"right","type":"string","default":"\"\""}]},
   {"name":"gui_clear","description":"Clear the Lua canvas without overwriting its firmware frame."},
+  {"name":"gui_close","description":"Close the Lua GUI and return to the script list."},
   {"name":"gui_text","description":"Draw clipped single-line text.","params":[{"name":"x","type":"integer"},{"name":"y","type":"integer"},{"name":"text","type":"string"},{"name":"color","type":"RfColor","default":"\"white\""}]},
   {"name":"gui_pixel","description":"Draw one clipped pixel.","params":[{"name":"x","type":"integer"},{"name":"y","type":"integer"},{"name":"color","type":"RfColor","default":"\"white\""}]},
   {"name":"gui_line","description":"Draw a clipped line.","params":[{"name":"x0","type":"integer"},{"name":"y0","type":"integer"},{"name":"x1","type":"integer"},{"name":"y1","type":"integer"},{"name":"color","type":"RfColor","default":"\"white\""}]},
@@ -207,6 +208,7 @@ int rfGuiFooter(lua_State* state) {
                                 luaL_optstring(state, 3, "")); return 0;
 }
 int rfGuiClear(lua_State*) { displayManager.luaGuiClear(); return 0; }
+int rfGuiClose(lua_State*) { displayManager.luaGuiClose(); return 0; }
 int rfGuiText(lua_State* state) {
     displayManager.luaGuiText(luaL_checkinteger(state, 1), luaL_checkinteger(state, 2),
                               luaL_checkstring(state, 3), optionalColor(state, 4)); return 0;
@@ -330,6 +332,7 @@ bool LuaEngine::run(const String& requestedName, Stream& output) {
     lua_pushcfunction(state, rfGuiBegin); lua_setfield(state, -2, "gui_begin");
     lua_pushcfunction(state, rfGuiFooter); lua_setfield(state, -2, "gui_footer");
     lua_pushcfunction(state, rfGuiClear); lua_setfield(state, -2, "gui_clear");
+    lua_pushcfunction(state, rfGuiClose); lua_setfield(state, -2, "gui_close");
     lua_pushcfunction(state, rfGuiText); lua_setfield(state, -2, "gui_text");
     lua_pushcfunction(state, rfGuiPixel); lua_setfield(state, -2, "gui_pixel");
     lua_pushcfunction(state, rfGuiLine); lua_setfield(state, -2, "gui_line");

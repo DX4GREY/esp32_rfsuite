@@ -18,6 +18,7 @@ public:
     void luaGuiBegin(const char* title);
     void luaGuiFooter(const char* left, const char* middle, const char* right);
     void luaGuiClear();
+    void luaGuiClose();
     void luaGuiText(int x, int y, const char* text, const char* color);
     void luaGuiPixel(int x, int y, const char* color);
     void luaGuiLine(int x0, int y0, int x1, int y1, const char* color);
@@ -44,6 +45,7 @@ private:
     bool luaShowingOutput = false;
     uint8_t luaOutputScroll = 0;
     bool luaShowingGui = false;
+    bool luaReturnToListRequested = false;
     static constexpr size_t FILE_UI_MAX_ENTRIES = 32;
     String fileNames[FILE_UI_MAX_ENTRIES];
     uint32_t fileSizes[FILE_UI_MAX_ENTRIES] = {};
