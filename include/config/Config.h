@@ -5,7 +5,7 @@
 // Keep this value in sync with the root VERSION file. Release builds verify
 // that the Git tag matches it before publishing any firmware.
 #ifndef APP_VERSION
-#define APP_VERSION "1.0.0"
+#define APP_VERSION "2.0.0"
 #endif
 
 // Analyzer-only is the safe default. The controlled-lab PlatformIO profile

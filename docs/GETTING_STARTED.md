@@ -68,7 +68,7 @@ The boot continues if no radio is detected. This intentional diagnostics-only mo
 ## First-boot validation
 
 1. Open `Tools → Radio Diag` and confirm the expected modules show `CONNECTED`.
-2. Open `Tools → Status` and review all four pages.
+2. Open `System Info` and review all five status pages.
 3. Open `Analyze → Spectrum`; verify that the graph updates without visible full-screen flicker.
 4. Change band, radio mode, trace, and zoom.
 5. Open `Analyze → Logging`, press `A`, and verify `RECORDING`.

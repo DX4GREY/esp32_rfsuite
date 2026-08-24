@@ -8,7 +8,7 @@ Return to the [documentation index](README.md), or see [Development Guide](DEVEL
 
 ```text
 Boot / Core 1
-  wake validation → Serial/NVS/LittleFS → buttons/TFT → radio probe → watchdog
+  wake validation → Serial/NVS/storage → buttons/TFT → nRF24/CC1101 probe → watchdog
                                       │
                                       ▼
 Arduino loop / Core 1                 Optional RF-lab task / Core 0
@@ -28,8 +28,8 @@ The TFT uses a separate SPI connection and is not protected by the radio mutex. 
 include/
 ├── config/       Hardware pins and compile-time constants
 ├── core/         Application types, analyzer math/state, and mode policies
-├── drivers/      Buttons and dual nRF24 interfaces
-├── services/     Serial CLI, recorder, performance metrics, and watchdog
+├── drivers/      Buttons, dual nRF24, and CC1101 interfaces
+├── services/     Serial, recorders, Sub-GHz processing, metrics, and watchdog
 └── ui/           Display API, shared theme, and menu metadata
 
 src/
@@ -92,7 +92,8 @@ Completed sweeps update all shared analyzer products once: waterfall, occupancy,
 ### Drivers
 
 - `RadioManager.cpp`: one/two-radio discovery, shared-SPI mutex and metrics, RX/TX lifecycle, and the optional Core 0 RF Test task.
-- `RadioAnalyzer.cpp`: spectrum and single-channel acquisition.
+- `RadioAnalyzer.cpp`: 2.4 GHz spectrum and single-channel acquisition.
+- `Cc1101Manager.cpp`: CC1101 SPI lifecycle, presets, RSSI, raw RX/TX, and packets.
 - `ButtonManager.cpp`: debounced edge and long-press detection.
 
 ### UI
@@ -109,6 +110,8 @@ Completed sweeps update all shared analyzer products once: waterfall, occupancy,
 ### Services
 
 - `SessionRecorder.cpp`: buffered LittleFS sessions, size limiting, CSV export, and last-sweep replay.
+- `SubGhzRawService.cpp`: Sub-GHz analyzer, waveform capture, protocol hints,
+  library/import/export, packet logging, simulation, and guarded replay/RF test.
 - `PerformanceMonitor.cpp`: smoothed scan/UI duration, maxima, and loop-rate tracking.
 - `SerialCommander.cpp`: CLI routing and machine-readable/diagnostic output.
 - `Watchdog.cpp`: main-loop liveness monitoring.
@@ -132,6 +135,13 @@ Transitions between transmit, receive, stopped, and powered-down states stay ins
 ## Display lifecycle
 
 `DisplayController` compares the current `AppMode` with the last rendered mode. A mode change clears the screen once, resets dynamic caches, and builds the new layout. Within the same mode, renderers update only dirty cards, fields, or graph columns. Theme changes intentionally force one clean rebuild so colors from the previous palette cannot remain.
+
+## Simulation lifecycle
+
+Simulation is runtime-only and selected after a missing-radio popup. The active
+band generates nRF24-style carrier activity or CC1101-style RSSI, pulse, and
+packet demonstrations. Headers display `SIM`, fake Sub-GHz recordings are not
+written as captures, and TX entry points remain blocked in every build profile.
 
 ## Adding a new display feature
 

@@ -1,10 +1,16 @@
-# RF24 Suite — ESP32-S3 Dual nRF24 2.4 GHz Analyzer
+# RF Suite v2.0 — ESP32-S3 2.4 GHz and Sub-GHz Toolkit
 
 <p align="center">
-  <img src="images/banner.svg" alt="RF24 Suite - ESP32-S3 Dual nRF24 2.4 GHz Analyzer">
+  <img src="images/banner.svg" alt="RF Suite v2.0 - ESP32-S3 2.4 GHz and Sub-GHz Toolkit">
 </p>
 
-A standalone firmware project for an ESP32-S3, one or two nRF24L01+ modules, and a 1.8-inch ST7735 TFT. It provides a 2.4 GHz spectrum analyzer, waterfall history, channel inspection, occupancy surveys, configurable RF event detection, LittleFS session recording, CSV export/replay, and live hardware/performance diagnostics. The default build is receive-only; active RF testing is isolated in a separate controlled-lab build profile.
+A standalone dual-band firmware project for an ESP32-S3, one or two nRF24L01+
+modules, an optional CC1101 Sub-GHz transceiver, microSD storage, and a 1.8-inch
+ST7735 TFT. Version 2.0 adds a band selector, CC1101 frequency analysis, raw
+recording with a live waveform, `.rfr`/Flipper `.sub` library support, packet
+analysis, global hardware-missing simulation, and application-wide dirty-region
+rendering. The default build remains receive-only; active RF testing is isolated
+in a separate controlled-lab build profile.
 
 The interface is designed for a 160 × 128 landscape display. It uses partial/dirty rendering: the complete screen is cleared only during page transitions, while graphs, status values, and menu cards are redrawn only where their content changes. This reduces flicker and keeps the UI responsive.
 
@@ -14,6 +20,12 @@ The interface is designed for a 160 × 128 landscape display. It uses partial/di
 ## Features
 
 - One- or two-radio operation with automatic degraded-mode fallback.
+- Optional CC1101 support with OOK/2-FSK presets, RSSI analysis, packet
+  inspection, and raw GDO0 capture.
+- Sub-GHz library on `/RFSuite/SubGHz` with clean, favorite, rename, delete,
+  `.rfr` replay, and Flipper RAW `.sub` import/export.
+- Global simulation fallback when nRF24 or CC1101 hardware is missing. Every
+  simulated screen is marked `SIM`; simulated data never enables RF output.
 - FreeRTOS mutex protection and contention metrics for the shared nRF24 SPI bus.
 - 126-channel RF24 spectrum analyzer (`0–125`, or `2400–2525 MHz`).
 - Four receive modes: `FAST`, `DIV`, `R1`, and `R2`.
@@ -32,7 +44,7 @@ The interface is designed for a 160 × 128 landscape display. It uses partial/di
   1/2 Mbps rate, live hexadecimal preview, and Serial dump.
 - `FAST`, `BALANCED`, `DEEP`, and `CUSTOM` analyzer profiles.
 - Independent connectivity diagnostics for both radios.
-- Four-page System Status with live ESP32, radio, build-profile, storage, UI, scan, and SPI timing data.
+- Five-page System Status with live ESP32, radio, build-profile, storage, UI, scan, and SPI timing data.
 - Six selectable display themes: Cyber, Ocean, Amber, Matrix, Violet, and Ice.
 - Versioned NVS configuration with validation, delayed writes, migration, and confirmed factory reset.
 - Native analyzer unit tests and GitHub Actions CI for both firmware profiles.
@@ -56,7 +68,8 @@ These numbers are not Wi-Fi channel numbers. For example, the center of Wi-Fi ch
 ## Required hardware
 
 - ESP32-S3 DevKitC-1 or a compatible board.
-- 2 × nRF24L01+ modules.
+- 1–2 × nRF24L01+ modules.
+- Optional CC1101 module with an antenna matched to the intended Sub-GHz band.
 - 1.8-inch 128 × 160 ST7735 TFT.
 - 4 × normally-open push buttons.
 - One 10–100 µF decoupling capacitor for each nRF24L01+.
@@ -161,14 +174,14 @@ default_envs = analyzer
 ## Versioning and releases
 
 The current firmware version is stored in `VERSION` and exposed in the device's
-**System Status → Radio / SW** page. Releases use semantic tags such as `v1.0.0`.
+**System Status → Radio / SW** page. The current release is `v2.0.0`.
 
 To publish a release, first update `VERSION` and `APP_VERSION` to the same
 semantic version, commit the change, then push its matching tag:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 The release workflow validates the tag, runs native tests, builds the safe
@@ -200,9 +213,10 @@ PlatformIO installs these dependencies automatically:
 
 ## User interface
 
-The main menu has four pages. Pages 1–3 contain six items and page 4 contains
-two. Choose the `GRID` (2 × 3 cards) or `LIST` layout in Settings. The current
-page and selection remain in memory while the device is powered.
+After the splash screen, the Main Menu selects 2.4 GHz, Sub-GHz, Settings,
+System Info, Lua, SD Files, or Power. The 2.4 GHz catalog retains its paged
+feature menu. Choose the `GRID` or `LIST` layout in Settings; the choice applies
+to the global, 2.4 GHz, and Sub-GHz menus.
 
 | Control | Main-menu action |
 |---|---|
@@ -335,14 +349,18 @@ The Status screen reads live runtime values instead of displaying hard-coded har
 
 1. **Device Info** — chip model, revision and core count, CPU frequency, flash size and clock, and uptime.
 2. **Memory Info** — total, free, and minimum heap, largest allocation block, sketch size, and PSRAM status.
-3. **Radio / Software** — each nRF24 connection, scan mode, receive-only/lab build, ESP-IDF, and build date.
+3. **Radio / Software** — each nRF24 connection or simulation state, scan mode,
+   receive-only/lab build, ESP-IDF, and firmware version.
 4. **Performance** — average/maximum sweep time, UI render time, loop rate, SPI mutex wait, and recorder state.
 
 A radio status of `CONNECTED` confirms SPI communication with the chip. It does not prove that the antenna, RF matching, or receiver sensitivity is working correctly.
 
 ## NVS persistence
 
-The following settings use schema version 2, validation, and a 1.5-second deferred write:
+The current settings use schema version 6, validation, migration, and a
+1.5-second deferred write. It also stores menu layout, packet-sniffer SD
+logging, CC1101 preset, TX-region policy, Sub-GHz trigger configuration, and
+replay count.
 
 - RF power.
 - Dwell time.

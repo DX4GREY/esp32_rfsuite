@@ -224,7 +224,8 @@ Use `UP/DOWN` to change page, `A` to refresh, and `B` to return.
 
 1. **Device Info**: chip model, revision/cores, CPU, flash size, flash clock, uptime.
 2. **Memory Info**: total/free/minimum heap, largest allocation, sketch use, PSRAM.
-3. **Radio / Software**: R1/R2 connection, scan mode, build mode, ESP-IDF, build date.
+3. **Radio / Software**: R1/R2 connection or simulation state, scan mode, build
+   mode, ESP-IDF, and firmware version.
 4. **Performance**: average/maximum sweep time, UI average, loop rate, SPI wait, session state.
 
 `SESSION STOPPED` means the SD/LittleFS recorder is not currently active. It does not mean that the analyzer, filesystem, or device has failed. Start it from Analyze → Logging or with `session start`.

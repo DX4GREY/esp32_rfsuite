@@ -1,4 +1,4 @@
-# RF24 Suite Documentation
+# RF Suite v2.0 Documentation
 
 This directory is the detailed technical and operating reference for RF24 Suite. The repository-level [README](../README.md) is the project overview; the documents below explain installation, hardware, operation, data formats, internals, and maintenance in depth.
 
@@ -14,6 +14,7 @@ This directory is the detailed technical and operating reference for RF24 Suite.
 | [Data and Storage](DATA_AND_STORAGE.md) | Data users | Serial summaries, LittleFS session layout, buffering, limits, export, and replay |
 | [Lua Scripting](LUA_SCRIPTING.md) | Script authors | Editor library generation, SD layout, TFT loader, `rf` API, sandbox, design guidance, and examples |
 | [Serial CLI](SERIAL_CLI.md) | Operators and automation | Complete command reference with validation ranges and examples |
+| [v2.0.0 Release Notes](RELEASE_2.0.0.md) | Users and maintainers | Dual-band, CC1101, simulation, UI, safety, and compatibility summary |
 
 ## Engineering and maintenance
 
@@ -30,7 +31,9 @@ This directory is the detailed technical and operating reference for RF24 Suite.
 
 - The default `analyzer` firmware is receive-only. Active RF test code is compile-time gated behind `authorized_rf_lab`.
 - Analyzer percentages are carrier-detection hit ratios, not calibrated RSSI or dBm.
-- One detected radio is sufficient. With no radio, the UI and diagnostics still boot.
+- One detected nRF24 is sufficient for 2.4 GHz. CC1101 is optional for Sub-GHz.
+- Missing nRF24 or CC1101 hardware opens a clearly labelled simulation option;
+  demo data is never presented as real RF and cannot authorize TX.
 - A complete display clear occurs only on page transitions; live screens use dirty-region updates.
 - `SESSION STOPPED` on the Performance page means the SD/LittleFS recorder is inactive. It is not a system fault.
 - Shutdown uses ESP32 deep sleep. Hold `A` for about 1.5 seconds to boot again.

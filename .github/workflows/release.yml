@@ -26,7 +26,7 @@ jobs:
           project_version="$(tr -d '[:space:]' < VERSION)"
           header_version="$(sed -n 's/^#define APP_VERSION "\([^"]*\)"/\1/p' include/config/Config.h)"
           if [[ ! "$tag_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Tag must use semantic versioning, for example v1.0.0."
+            echo "Tag must use semantic versioning, for example v2.0.0."
             exit 1
           fi
           if [[ "$tag_version" != "$project_version" ]]; then

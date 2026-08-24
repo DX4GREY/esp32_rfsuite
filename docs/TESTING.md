@@ -53,6 +53,9 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
 - Two-radio boot reports R1 and R2 connected.
 - R1-only and R2-only boots reach the UI and acquire data.
 - No-radio boot reaches diagnostics without reset looping.
+- Missing nRF24 offers labelled 2.4 GHz simulation.
+- Missing CC1101 offers labelled Sub-GHz simulation without saving fake RF captures.
+- Simulation cannot start RF Test, replay, or authorized probe transmission.
 - FAST, DIV, R1, and R2 behave as documented.
 - Radio diagnostics do not destabilize acquisition.
 - SPI timeout count remains zero during normal use.
@@ -104,7 +107,7 @@ Before tagging or distributing firmware:
 7. Record RAM and flash use.
 8. Review the diff for accidental credentials, generated files, or unsafe default changes.
 
-Pushing a semantic version tag such as `v1.0.0` runs
+Pushing the `v2.0.0` semantic version tag runs
 `.github/workflows/release.yml`. The tag must match both `VERSION` and
 `APP_VERSION`. The workflow publishes only the receive-only `analyzer` binary,
 its SHA-256 checksum, and automatically generated notes covering changes since
