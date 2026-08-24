@@ -53,19 +53,35 @@ void DisplayManager::renderSettingsScreen() {
     else if (appState.powerLevel == RF24_PA_HIGH) pwrColor = SPECTRUM_HIGH;
     else if (appState.powerLevel == RF24_PA_LOW) pwrColor = SPECTRUM_MID;
     else pwrColor = SPECTRUM_LOW;
-    drawSettingRow(0, 17, "TX POWER", appState.getPowerLevelName(), pwrColor);
-    drawSettingRow(1, 34, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
-    drawSettingRow(2, 51, "DISPLAY THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
-    drawSettingRow(3, 68, "MENU VIEW", appState.getMenuLayoutName(), SPECTRUM_LOW);
+    const int theme = static_cast<int>(appState.displayTheme);
+    const int layout = static_cast<int>(appState.menuLayout);
+    const int sniffState = !storageManager.usingSd() ? -1 : (appState.saveSniffPacketsToSd ? 1 : 0);
+    auto dirtyRow = [&](int row) {
+        return previousSettingsSelection < 0 || previousSettingsTheme != theme ||
+               previousSettingsSelection == row ||
+               settingsSelection == row;
+    };
+    if (dirtyRow(0) || previousPowerLevel != static_cast<int>(appState.powerLevel))
+        drawSettingRow(0, 17, "TX POWER", appState.getPowerLevelName(), pwrColor);
+    if (dirtyRow(1) || previousDwellTimeUs != appState.dwellTimeUs)
+        drawSettingRow(1, 34, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
+    if (dirtyRow(2) || previousSettingsTheme != theme)
+        drawSettingRow(2, 51, "DISPLAY THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
+    if (dirtyRow(3) || previousSettingsMenuLayout != layout)
+        drawSettingRow(3, 68, "MENU VIEW", appState.getMenuLayoutName(), SPECTRUM_LOW);
     const char* sniffSave = !storageManager.usingSd() ? "NO SD" :
                             (appState.saveSniffPacketsToSd ? "SD CARD" : "OFF");
     const uint16_t sniffColor = !storageManager.usingSd() ? SPECTRUM_CRITICAL :
                                   (appState.saveSniffPacketsToSd ? SPECTRUM_LOW : ST77XX_GRAY);
-    drawSettingRow(4, 85, "SNIFF TO SD", sniffSave, sniffColor);
+    if (dirtyRow(4) || previousSettingsSniffSave != sniffState)
+        drawSettingRow(4, 85, "SNIFF TO SD", sniffSave, sniffColor);
 
     previousSettingsSelection = settingsSelection;
     previousPowerLevel = static_cast<int>(appState.powerLevel);
     previousDwellTimeUs = appState.dwellTimeUs;
+    previousSettingsTheme = theme;
+    previousSettingsMenuLayout = layout;
+    previousSettingsSniffSave = sniffState;
 }
 
 // =============================================================================
@@ -108,14 +124,14 @@ void DisplayManager::renderStatusScreen() {
     } else if (statusPage == 2) {
         const bool radio1Ok = radioManager.isRadio1Connected();
         const bool radio2Ok = radioManager.isRadio2Connected();
-        labels[0] = "RADIO 1";   values[0] = radio1Ok ? "CONNECTED" : "NOT FOUND";
-        labels[1] = "RADIO 2";   values[1] = radio2Ok ? "CONNECTED" : "NOT FOUND";
+        labels[0] = "RADIO 1";   values[0] = appState.simulationMode ? "SIMULATED" : (radio1Ok ? "CONNECTED" : "NOT FOUND");
+        labels[1] = "RADIO 2";   values[1] = appState.simulationMode ? "SIMULATED" : (radio2Ok ? "CONNECTED" : "NOT FOUND");
         labels[2] = "SCAN MODE"; values[2] = appState.getAnalyzerRadioModeName();
         labels[3] = "BUILD MODE"; values[3] = radioManager.transmitFeaturesEnabled() ? "RF LAB" : "RX ONLY";
         labels[4] = "ESP-IDF";    values[4] = ESP.getSdkVersion();
         labels[5] = "FIRMWARE";   values[5] = "v" APP_VERSION;
-        colors[0] = radio1Ok ? SPECTRUM_LOW : SPECTRUM_CRITICAL;
-        colors[1] = radio2Ok ? SPECTRUM_LOW : SPECTRUM_CRITICAL;
+        colors[0] = appState.simulationMode ? SPECTRUM_HIGH : (radio1Ok ? SPECTRUM_LOW : SPECTRUM_CRITICAL);
+        colors[1] = appState.simulationMode ? SPECTRUM_HIGH : (radio2Ok ? SPECTRUM_LOW : SPECTRUM_CRITICAL);
         colors[2] = SPECTRUM_ACCENT;
         colors[3] = SPECTRUM_HIGH;
     } else if (statusPage == 3) {
@@ -189,11 +205,16 @@ void DisplayManager::renderStatusScreen() {
 // POWER MENU
 // =============================================================================
 void DisplayManager::renderPowerScreen() {
-    drawModernHeader("POWER OPTIONS", SPECTRUM_HIGH);
+    if (!powerLayoutDrawn) {
+        drawModernHeader("POWER OPTIONS", SPECTRUM_HIGH);
+        drawModernFooter("U/D SEL", "A OK", "B BACK");
+        powerLayoutDrawn = true;
+    }
 
     const char* titles[2] = {"RESTART", "SHUTDOWN"};
     const char* subtitles[2] = {"Reboot firmware", "Enter deep sleep"};
     for (int item = 0; item < 2; item++) {
+        if (previousPowerSelection >= 0 && item != previousPowerSelection && item != powerSelection) continue;
         const int y = 22 + item * 39;
         const bool selected = powerSelection == item;
         const uint16_t background = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
@@ -211,7 +232,7 @@ void DisplayManager::renderPowerScreen() {
         tft.print(subtitles[item]);
     }
 
-    drawModernFooter("U/D SEL", "A OK", "B BACK");
+    previousPowerSelection = powerSelection;
 }
 
 void DisplayManager::renderShutdownScreen() {

@@ -150,13 +150,35 @@ void loop() {
         !appState.analyzerFrozen) {
         // Radio Analyzer Mode: Scan 126 channels and update spectrum levels
         const uint32_t scanStartedUs = micros();
-        radioManager.scanSpectrum(yieldToUI);
+        if (appState.simulationMode && appState.radioBand == RADIO_BAND_24_GHZ) {
+            static uint32_t simulatedSweep = 0;
+            int minCh, maxCh; appState.getAnalyzerChannelRange(minCh, maxCh);
+            uint8_t best = 0; int bestChannel = minCh;
+            for (int ch = minCh; ch <= maxCh; ++ch) {
+                const int beaconA = max(0, 82 - abs(ch - 42) * 7);
+                const int beaconB = max(0, 63 - abs(ch - 88) * 5);
+                const uint8_t level = constrain(max(beaconA, beaconB) +
+                    static_cast<int>((simulatedSweep + ch * 3) % 9), 0, 100);
+                appState.spectrumLevels[ch] = level;
+                appState.radio1Levels[ch] = level;
+                appState.radio2Levels[ch] = level > 8 ? level - 8 : 0;
+                appState.peakLevels[ch] = max(appState.peakLevels[ch], level);
+                if (level > best) { best = level; bestChannel = ch; }
+            }
+            appState.peakLevel = best; appState.peakChannel = bestChannel;
+            appState.recordCompletedSweep(0); simulatedSweep++;
+            delay(25);
+        } else radioManager.scanSpectrum(yieldToUI);
         performanceMonitor.recordSweep(micros() - scanStartedUs);
     } else if (appState.appMode == APP_MODE_ANALYZER_CHANNEL) {
         // Channel Inspector Mode: Deep RF monitoring on a single channel
         // (no per-loop requestRedraw => only dynamic areas are updated,
         //  eliminating flicker from repeated fillScreen)
-        radioManager.inspectChannel(appState.inspectedChannel);
+        if (appState.simulationMode) {
+            const uint8_t level = 25 + ((millis() / 40 + appState.inspectedChannel * 5) % 70);
+            appState.inspectedLevel = level;
+            appState.inspectedPeak = max(appState.inspectedPeak, level);
+        } else radioManager.inspectChannel(appState.inspectedChannel);
         delay(25);
     } else if (appState.appMode == APP_MODE_PACKET_SNIFFER) {
         radioManager.servicePacketSniffer();

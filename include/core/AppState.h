@@ -12,6 +12,8 @@ struct AppState {
     // Mode UI & Operasi
     AppMode appMode = APP_MODE_BAND_SELECT;
     RadioBand radioBand = RADIO_BAND_24_GHZ;
+    // Runtime-only demonstration mode. Never persisted and never authorizes TX.
+    bool simulationMode = false;
 
     // ----- JAMMER STATE -----
     volatile bool jamming = false;

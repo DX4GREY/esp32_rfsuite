@@ -254,10 +254,15 @@ void DisplayManager::processInput() {
         } else if (buttonManager.isPressed(BTN_A)) {
             radioManager.stopAll();
             if (bandSelection == 0) {
-                appState.radioBand = RADIO_BAND_24_GHZ; appState.appMode = APP_MODE_MENU;
+                appState.radioBand = RADIO_BAND_24_GHZ;
+                if (radioManager.isConnected()) {
+                    appState.simulationMode = false;
+                    appState.appMode = APP_MODE_MENU;
+                } else appState.appMode = APP_MODE_SUBGHZ_OFFLINE;
             } else if (bandSelection == 1) {
                 appState.radioBand = RADIO_BAND_SUB_GHZ;
                 if (cc1101Manager.isConnected()) {
+                    appState.simulationMode = false;
                     subGhzRawService.setSimulationMode(false);
                     appState.appMode = APP_MODE_SUBGHZ;
                 } else appState.appMode = APP_MODE_SUBGHZ_OFFLINE;
@@ -278,11 +283,13 @@ void DisplayManager::processInput() {
 
     if (appState.appMode == APP_MODE_SUBGHZ_OFFLINE) {
         if (buttonManager.isPressed(BTN_A)) {
-            subGhzRawService.setSimulationMode(true);
-            appState.appMode = APP_MODE_SUBGHZ;
+            appState.simulationMode = true;
+            const bool subGhz = appState.radioBand == RADIO_BAND_SUB_GHZ;
+            subGhzRawService.setSimulationMode(subGhz);
+            appState.appMode = subGhz ? APP_MODE_SUBGHZ : APP_MODE_MENU;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
-            subGhzRawService.setSimulationMode(false);
+            appState.simulationMode = false; subGhzRawService.setSimulationMode(false);
             appState.appMode = APP_MODE_BAND_SELECT;
             needRedraw = true;
         }
@@ -537,7 +544,7 @@ void DisplayManager::processInput() {
                 filePath = "/"; fileEntryCount = 0; fileSelection = 0;
                 fileStatus = "";
             }
-            if (feature.mode == APP_MODE_PACKET_SNIFFER) {
+            if (feature.mode == APP_MODE_PACKET_SNIFFER && !appState.simulationMode) {
                 radioManager.startPacketSniffer(40, SnifferDataRate::RATE_2_MBPS);
                 lastSnifferRenderMs = 0;
             }

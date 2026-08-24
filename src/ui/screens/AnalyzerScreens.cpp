@@ -15,7 +15,7 @@ void DisplayManager::drawSpectrumGrid() {
     tft.drawFastVLine(10, 3, 8, SPECTRUM_ACCENT);
     tft.setCursor(15, 3);
     tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
-    tft.print("SPECTRUM");
+    tft.print(appState.simulationMode ? "SIM SPECTRUM" : "SPECTRUM");
 
     tft.fillRoundRect(66, 2, 31, 10, 3, SPECTRUM_BORDER);
     const char* band = compactBandName(appState.analyzerBand);

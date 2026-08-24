@@ -12,10 +12,11 @@ Library, Presets, Packets, and RF Test.
 
 ### Sub-GHz Frequency Analyzer
 
-If CC1101 is not detected when Sub-GHz is opened, a warning asks whether to
-enter simulation mode. Simulated screens are explicitly marked `SIM` and show
-generated demonstration data only; they are not real RF measurements and RF
-transmission remains unavailable.
+If the selected radio is unavailable, the application offers a global
+simulation mode: nRF24 for 2.4 GHz or CC1101 for Sub-GHz. Simulated screens are
+explicitly marked `SIM` and show generated demonstration data only; they are
+not real RF measurements. Capture files and every RF transmission remain
+disabled for simulated radios.
 
 Analyzer continuously samples 20 frequencies across the CC1101 hardware bands
 and displays live RSSI bars. Press `A` to refine the strongest result in 100

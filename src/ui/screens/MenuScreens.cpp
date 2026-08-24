@@ -106,11 +106,12 @@ void DisplayManager::renderSubGhzScreen() {
 }
 
 void DisplayManager::renderSubGhzOfflinePopup() {
-    drawModernHeader("CC1101 OFFLINE", SPECTRUM_CRITICAL);
+    const bool subGhz = appState.radioBand == RADIO_BAND_SUB_GHZ;
+    drawModernHeader(subGhz ? "CC1101 OFFLINE" : "NRF24 OFFLINE", SPECTRUM_CRITICAL);
     tft.fillRoundRect(6, 20, 148, 70, 5, SPECTRUM_CARD_BG);
     tft.drawRoundRect(6, 20, 148, 70, 5, SPECTRUM_CRITICAL);
     tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
-    tft.setCursor(14, 29); tft.print("CC1101 NOT");
+    tft.setCursor(14, 29); tft.print(subGhz ? "CC1101 NOT" : "NRF24 NOT");
     tft.setCursor(14, 41); tft.print("DETECTED");
     tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
     tft.setCursor(14, 58); tft.print("Use simulation?");
@@ -158,22 +159,39 @@ void DisplayManager::renderSubGhzAnalyzerScreen() {
 }
 
 void DisplayManager::renderSubGhzPresetsScreen() {
-    drawModernHeader(subGhzRawService.simulationMode() ? "SIM PRESETS" : "SUB-GHz PRESETS", SPECTRUM_HIGH);
-    tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
-    tft.fillRoundRect(6, 21, 148, 68, 5, SPECTRUM_CARD_BG);
-    tft.drawRoundRect(6, 21, 148, 68, 5, SPECTRUM_BORDER);
-    tft.setCursor(12, 29); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("MODULATION");
-    tft.setCursor(12, 43); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
-    tft.print(cc1101Manager.presetName());
-    tft.setCursor(12, 61); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("TX REGION");
-    tft.setCursor(80, 61);
-    tft.setTextColor(subGhzRawService.region() == SubGhzRegion::RX_ONLY ?
-                     SPECTRUM_CRITICAL : SPECTRUM_LOW, SPECTRUM_CARD_BG);
-    tft.print(subGhzRawService.regionName());
-    tft.setCursor(12, 76); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
-    tft.printf("TRG %d  REPLAY %uX", subGhzRawService.triggerThresholdDbm(),
-               subGhzRawService.replayRepeatCount());
-    drawModernFooter("U/D PRE", "A REGION", "HOLD B REP");
+    if (!subPresetLayoutDrawn) {
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM PRESETS" : "SUB-GHz PRESETS", SPECTRUM_HIGH);
+        tft.fillRoundRect(6, 21, 148, 68, 5, SPECTRUM_CARD_BG);
+        tft.drawRoundRect(6, 21, 148, 68, 5, SPECTRUM_BORDER);
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.setCursor(12, 29); tft.print("MODULATION");
+        tft.setCursor(12, 61); tft.print("TX REGION");
+        drawModernFooter("U/D PRE", "A REGION", "HOLD B REP");
+        subPresetLayoutDrawn = true;
+    }
+    const int preset = static_cast<int>(cc1101Manager.preset());
+    const int region = static_cast<int>(subGhzRawService.region());
+    const int trigger = subGhzRawService.triggerThresholdDbm();
+    const int repeats = subGhzRawService.replayRepeatCount();
+    if (previousSubPreset != preset) {
+        tft.fillRect(10, 40, 140, 11, SPECTRUM_CARD_BG);
+        tft.setCursor(12, 43); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+        tft.print(cc1101Manager.presetName());
+    }
+    if (previousSubRegion != region) {
+        tft.fillRect(78, 58, 72, 11, SPECTRUM_CARD_BG);
+        tft.setCursor(80, 61);
+        tft.setTextColor(subGhzRawService.region() == SubGhzRegion::RX_ONLY ?
+                         SPECTRUM_CRITICAL : SPECTRUM_LOW, SPECTRUM_CARD_BG);
+        tft.print(subGhzRawService.regionName());
+    }
+    if (previousSubTrigger != trigger || previousSubRepeats != repeats) {
+        tft.fillRect(10, 73, 140, 11, SPECTRUM_CARD_BG);
+        tft.setCursor(12, 76); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.printf("TRG %d  REPLAY %dX", trigger, repeats);
+    }
+    previousSubPreset = preset; previousSubRegion = region;
+    previousSubTrigger = trigger; previousSubRepeats = repeats;
 }
 
 void DisplayManager::renderSubGhzPacketScreen() {
@@ -535,7 +553,7 @@ void DisplayManager::redrawMenuItems(int oldSel, int newSel) {
 // RENDER MAIN MENU (COMPACT & FIT)
 // =============================================================================
 void DisplayManager::renderMainMenu() {
-    drawModernHeader(MenuCatalog::pageTitle(menuPage), SPECTRUM_ACCENT);
+    drawModernHeader(appState.simulationMode ? "2.4 GHz [SIM]" : MenuCatalog::pageTitle(menuPage), SPECTRUM_ACCENT);
     tft.fillRoundRect(137, 2, 20, 10, 3, SPECTRUM_BORDER);
     tft.setCursor(139, 3);
     tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
@@ -562,7 +580,7 @@ void DisplayManager::renderMainMenu() {
 // RENDER JAMMER SCREEN (COMPACT & FIT)
 // =============================================================================
 void DisplayManager::renderJammerScreen() {
-    if (!radioManager.transmitFeaturesEnabled()) {
+    if (appState.simulationMode || !radioManager.transmitFeaturesEnabled()) {
         if (!jammerLayoutDrawn) {
             drawModernHeader("RF TEST", SPECTRUM_LOW);
             tft.fillRoundRect(9, 21, 142, 76, 6, SPECTRUM_CARD_BG);
@@ -571,7 +589,7 @@ void DisplayManager::renderJammerScreen() {
             tft.setCursor(44, 32);
             tft.setTextColor(SPECTRUM_LOW, SPECTRUM_CARD_BG);
             tft.setTextColor(SPECTRUM_LOW, SPECTRUM_HEADER_BG);
-            tft.print("RX ONLY BUILD");
+            tft.print(appState.simulationMode ? "SIMULATION MODE" : "RX ONLY BUILD");
             tft.setCursor(27, 51);
             tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
             tft.print("Active RF output");

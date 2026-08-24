@@ -57,12 +57,26 @@ void DisplayManager::resetDynamicCaches() {
     previousSubTestState = -1;
     jammerLayoutDrawn = false;
     settingsLayoutDrawn = false;
+    powerLayoutDrawn = false;
+    snifferLayoutDrawn = false;
+    subPresetLayoutDrawn = false;
     previousJammerTarget = -1;
     previousJamChannel = -1;
     previousJamChannel2 = -1;
     previousPowerLevel = -1;
     previousDwellTimeUs = -1;
     previousSettingsSelection = -1;
+    previousSettingsTheme = -1;
+    previousSettingsMenuLayout = -1;
+    previousSettingsSniffSave = -1;
+    previousPowerSelection = -1;
+    previousSubPreset = previousSubRegion = previousSubRepeats = -1;
+    previousSubTrigger = 999;
+    snifferRunningValid = false;
+    previousSnifferChannel = 0xFF;
+    previousSnifferRate = -1;
+    previousSnifferPackets = 0xFFFFFFFF;
+    previousSnifferText = "";
     jammingStatusValid = false;
     renderedStatusPage = -1;
     for (int i = 0; i < 6; i++) {
