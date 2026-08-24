@@ -9,6 +9,7 @@ public:
     fs::FS& filesystem();
     const char* sessionPath() const;
     const char* scriptsPath() const { return "/RFSuite/scripts"; }
+    const char* subGhzPath() const { return "/RFSuite/SubGHz"; }
     bool usingSd() const { return sdMounted; }
     const char* backendName() const { return sdMounted ? "SD" : "LittleFS"; }
     const char* sdStatus() const { return sdState; }

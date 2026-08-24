@@ -30,6 +30,26 @@ private:
     int menuSelection = 0;
     int menuPage = 0;
     int menuScrollOffset = 0;
+    int bandSelection = 0;
+    int mainMenuScrollOffset = 0;
+    int previousBandSelection = 0;
+    int previousMainMenuScrollOffset = 0;
+    bool mainMenuNeedsPartialRedraw = false;
+    int subGhzPreset = 1;
+    int subGhzMenuSelection = 0;
+    int previousSubGhzMenuSelection = 0;
+    int subGhzMenuScrollOffset = 0;
+    int previousSubGhzMenuScrollOffset = 0;
+    bool subGhzMenuNeedsPartialRedraw = false;
+    static constexpr size_t SUBGHZ_UI_MAX_FILES = 20;
+    String subGhzFiles[SUBGHZ_UI_MAX_FILES];
+    size_t subGhzFileCount = 0;
+    size_t subGhzFileSelection = 0;
+    size_t previousSubGhzFileSelection = 0;
+    size_t subGhzFileScrollOffset = 0;
+    size_t previousSubGhzFileScrollOffset = 0;
+    bool subGhzEmulateNeedsPartialRedraw = false;
+    bool subGhzDeleteArmed = false;
     int settingsSelection = 0;
     int statusPage = 0;
     int powerSelection = 0;
@@ -116,6 +136,20 @@ private:
     bool previousEnvRunning = false;
     bool envRunningStatusValid = false;
     bool envLayoutDrawn = false;
+    bool subRecordLayoutDrawn = false;
+    bool subRfTestLayoutDrawn = false;
+    bool subAnalyzerLayoutDrawn = false;
+    bool subPacketLayoutDrawn = false;
+    int16_t previousSubAnalyzerLevels[20] = {};
+    uint32_t previousSubPacketCount = 0xFFFFFFFF;
+    uint32_t previousSubPulseCount = 0xFFFFFFFF;
+    uint32_t subGraphProcessedPulses = 0;
+    int subGraphX = 8;
+    bool subGraphLevel = false;
+    bool subGraphInitialized = false;
+    int previousSubFrequencyKhz = -1;
+    int previousSubRecordState = -1;
+    int previousSubTestState = -1;
 
     // Tracks page transitions separately from content changes. A full clear is
     // only needed when a different page replaces the current layout.
@@ -136,6 +170,21 @@ private:
 
     // Screen Renderers
     void renderMainMenu();
+    void renderBandSelector();
+    void renderSubGhzScreen();
+    void renderSubGhzOfflinePopup();
+    void drawMainMenuItem(int featureIndex, int slot, bool selected);
+    void drawSubGhzMenuItem(int index, bool selected);
+    void redrawMainMenuItems();
+    void redrawSubGhzMenuItems();
+    void drawSubGhzFileItem(size_t index, bool selected);
+    void redrawSubGhzFileItems();
+    void renderSubGhzRecordScreen();
+    void renderSubGhzEmulateScreen();
+    void renderSubGhzAnalyzerScreen();
+    void renderSubGhzPresetsScreen();
+    void renderSubGhzPacketScreen();
+    void renderSubGhzRfTestScreen();
     void renderJammerScreen();
     void renderSpectrumAnalyzer();
     void renderWaterfallScreen();

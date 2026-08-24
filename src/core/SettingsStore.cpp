@@ -4,7 +4,7 @@
 #include "core/RfEnvironmentMath.h"
 
 namespace {
-constexpr uint8_t SETTINGS_SCHEMA_VERSION = 5;
+constexpr uint8_t SETTINGS_SCHEMA_VERSION = 6;
 constexpr unsigned long SETTINGS_SAVE_DELAY_MS = 1500;
 }
 
@@ -85,6 +85,14 @@ void AppState::loadSettings() {
     if (storedSchema >= 5) {
         saveSniffPacketsToSd = prefs.getBool("sniff_sd", false);
     }
+    if (storedSchema >= 6) {
+        subGhzRadioPreset = constrain(prefs.getUChar("sub_pre", 1), 0, 4);
+        subGhzRegion = constrain(prefs.getUChar("sub_reg", 0), 0, 2);
+        subGhzAutoTrigger = prefs.getBool("sub_trig", true);
+        subGhzTriggerThreshold = constrain(static_cast<int>(prefs.getChar("sub_thr", -80)), -90, -70);
+        const uint8_t repeats = prefs.getUChar("sub_rep", 1);
+        subGhzReplayRepeats = repeats >= 5 ? 5 : (repeats >= 3 ? 3 : 1);
+    }
     prefs.end();
 
     setJammerTarget(jammerTarget);
@@ -104,6 +112,11 @@ void AppState::saveSettings() {
     prefs.putUChar("theme", static_cast<uint8_t>(displayTheme));
     prefs.putUChar("menu_view", static_cast<uint8_t>(menuLayout));
     prefs.putBool("sniff_sd", saveSniffPacketsToSd);
+    prefs.putUChar("sub_pre", subGhzRadioPreset);
+    prefs.putUChar("sub_reg", subGhzRegion);
+    prefs.putBool("sub_trig", subGhzAutoTrigger);
+    prefs.putChar("sub_thr", static_cast<int8_t>(subGhzTriggerThreshold));
+    prefs.putUChar("sub_rep", subGhzReplayRepeats);
     prefs.putUChar("trace", static_cast<uint8_t>(analyzerTraceMode));
     prefs.putUChar("evt_thr", eventThreshold);
     prefs.putUChar("evt_hys", eventHysteresis);
@@ -152,6 +165,10 @@ void AppState::factoryResetSettings() {
     displayTheme = DISPLAY_THEME_CYBER;
     menuLayout = MENU_LAYOUT_GRID;
     saveSniffPacketsToSd = false;
+    subGhzRadioPreset = 1;
+    subGhzRegion = 0;
+    subGhzAutoTrigger = true;
+    subGhzTriggerThreshold = -80;
     scanProfile = SCAN_PROFILE_BALANCED;
     customSpectrumSamples = 40;
     analyzerTraceMode = ANALYZER_TRACE_LIVE;

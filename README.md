@@ -114,7 +114,7 @@ All buttons use `INPUT_PULLUP` and are active-low. Connect one side of each butt
 | DOWN | 8 | Next item or change analyzer mode |
 | B | 5 | Back or switch main-menu page |
 
-On **Scripting → PKT SNIFF**, `UP/DOWN` selects nRF24 channel 0–125, `A`
+On **Tools → PKT SNIFF**, `UP/DOWN` selects nRF24 channel 0–125, `A`
 switches between 1 and 2 Mbps, and `B` stops capture. The screen shows the most
 recent 32-byte raw payload as hexadecimal; complete payloads are also written
 to the Serial Monitor. This experimental mode uses radio 1 only and leaves

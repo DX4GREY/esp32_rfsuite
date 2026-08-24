@@ -6,7 +6,16 @@
 // navigation and menu metadata evolve without pulling the full global state
 // into every module.
 enum AppMode {
+    APP_MODE_BAND_SELECT,
     APP_MODE_MENU,
+    APP_MODE_SUBGHZ_OFFLINE,
+    APP_MODE_SUBGHZ,
+    APP_MODE_SUBGHZ_ANALYZER,
+    APP_MODE_SUBGHZ_RECORD,
+    APP_MODE_SUBGHZ_EMULATE,
+    APP_MODE_SUBGHZ_PRESETS,
+    APP_MODE_SUBGHZ_PACKET,
+    APP_MODE_SUBGHZ_RF_TEST,
     APP_MODE_JAMMER,
     APP_MODE_ANALYZER_SPECTRUM,
     APP_MODE_WATERFALL,
@@ -34,6 +43,11 @@ enum AppMode {
     APP_MODE_PHOTO_VIEWER,
     APP_MODE_REBOOT,
     APP_MODE_SHUTDOWN
+};
+
+enum RadioBand : uint8_t {
+    RADIO_BAND_24_GHZ = 0,
+    RADIO_BAND_SUB_GHZ
 };
 
 enum JammerTarget {

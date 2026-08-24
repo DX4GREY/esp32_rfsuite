@@ -1,6 +1,7 @@
 #include "ui/DisplayManager.h"
 #include "drivers/ButtonManager.h"
 #include "drivers/RadioManager.h"
+#include "drivers/Cc1101Manager.h"
 #include "ui/MenuCatalog.h"
 #include "services/SessionRecorder.h"
 #include "services/RfEnvironmentAnalyzer.h"
@@ -9,6 +10,9 @@
 #include "services/LuaEngine.h"
 #include "services/StorageManager.h"
 #include "services/PacketSniffer.h"
+#include "services/SubGhzRawService.h"
+
+void yieldToUI();
 
 namespace {
 class LuaDisplayStream : public Stream {
@@ -41,9 +45,17 @@ void DisplayManager::updateUI() {
         resetDynamicCaches();
         needRedraw = true;
         menuNeedsPartialRedraw = false;
+        mainMenuNeedsPartialRedraw = false;
+        subGhzMenuNeedsPartialRedraw = false;
+        subGhzEmulateNeedsPartialRedraw = false;
     }
 
     switch (appState.appMode) {
+        case APP_MODE_BAND_SELECT:
+            if (mainMenuNeedsPartialRedraw) {
+                redrawMainMenuItems(); mainMenuNeedsPartialRedraw = false;
+            } else if (needRedraw) { renderBandSelector(); needRedraw = false; }
+            break;
         case APP_MODE_MENU:
             if (menuNeedsPartialRedraw) {
                 redrawMenuItems(prevMenuSelection, menuSelection);
@@ -52,6 +64,45 @@ void DisplayManager::updateUI() {
                 renderMainMenu();
                 needRedraw = false;
                 menuNeedsPartialRedraw = false;
+            }
+            break;
+        case APP_MODE_SUBGHZ_OFFLINE:
+            if (needRedraw) { renderSubGhzOfflinePopup(); needRedraw = false; }
+            break;
+        case APP_MODE_SUBGHZ:
+            if (subGhzMenuNeedsPartialRedraw) {
+                redrawSubGhzMenuItems(); subGhzMenuNeedsPartialRedraw = false;
+            } else if (needRedraw) {
+                renderSubGhzScreen();
+                needRedraw = false;
+            }
+            break;
+        case APP_MODE_SUBGHZ_RECORD:
+            if (needRedraw || millis() - lastStatusRenderMs >= 200) {
+                renderSubGhzRecordScreen(); lastStatusRenderMs = millis(); needRedraw = false;
+            }
+            break;
+        case APP_MODE_SUBGHZ_ANALYZER:
+            if (needRedraw || millis() - lastStatusRenderMs >= 150) {
+                renderSubGhzAnalyzerScreen(); lastStatusRenderMs = millis(); needRedraw = false;
+            }
+            break;
+        case APP_MODE_SUBGHZ_EMULATE:
+            if (subGhzEmulateNeedsPartialRedraw) {
+                redrawSubGhzFileItems(); subGhzEmulateNeedsPartialRedraw = false;
+            } else if (needRedraw) { renderSubGhzEmulateScreen(); needRedraw = false; }
+            break;
+        case APP_MODE_SUBGHZ_PRESETS:
+            if (needRedraw) { renderSubGhzPresetsScreen(); needRedraw = false; }
+            break;
+        case APP_MODE_SUBGHZ_PACKET:
+            if (needRedraw || millis() - lastStatusRenderMs >= 150) {
+                renderSubGhzPacketScreen(); lastStatusRenderMs = millis(); needRedraw = false;
+            }
+            break;
+        case APP_MODE_SUBGHZ_RF_TEST:
+            if (needRedraw || millis() - lastStatusRenderMs >= 150) {
+                renderSubGhzRfTestScreen(); lastStatusRenderMs = millis(); needRedraw = false;
             }
             break;
         case APP_MODE_JAMMER:
@@ -173,6 +224,242 @@ void DisplayManager::updateUI() {
 // INPUT NAVIGATION
 // =============================================================================
 void DisplayManager::processInput() {
+    if (appState.appMode == APP_MODE_BAND_SELECT) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            previousBandSelection = bandSelection;
+            previousMainMenuScrollOffset = mainMenuScrollOffset;
+            bandSelection = (bandSelection + 6) % 7;
+            const int slot = bandSelection % 6;
+            if (bandSelection == 6) mainMenuScrollOffset = 0;
+            else if (slot < mainMenuScrollOffset) mainMenuScrollOffset = slot;
+            else if (slot >= mainMenuScrollOffset + 4) mainMenuScrollOffset = slot - 3;
+            if (previousBandSelection / 6 != bandSelection / 6) needRedraw = true;
+            else mainMenuNeedsPartialRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            previousBandSelection = bandSelection;
+            previousMainMenuScrollOffset = mainMenuScrollOffset;
+            bandSelection = (bandSelection + 1) % 7;
+            const int slot = bandSelection % 6;
+            if (bandSelection == 6 || bandSelection == 0) mainMenuScrollOffset = 0;
+            else if (slot >= mainMenuScrollOffset + 4) mainMenuScrollOffset = slot - 3;
+            if (previousBandSelection / 6 != bandSelection / 6) needRedraw = true;
+            else mainMenuNeedsPartialRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            previousBandSelection = bandSelection;
+            previousMainMenuScrollOffset = mainMenuScrollOffset;
+            bandSelection = bandSelection < 6 ? 6 : 0;
+            mainMenuScrollOffset = 0;
+            mainMenuNeedsPartialRedraw = false;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            radioManager.stopAll();
+            if (bandSelection == 0) {
+                appState.radioBand = RADIO_BAND_24_GHZ; appState.appMode = APP_MODE_MENU;
+            } else if (bandSelection == 1) {
+                appState.radioBand = RADIO_BAND_SUB_GHZ;
+                if (cc1101Manager.isConnected()) {
+                    subGhzRawService.setSimulationMode(false);
+                    appState.appMode = APP_MODE_SUBGHZ;
+                } else appState.appMode = APP_MODE_SUBGHZ_OFFLINE;
+            } else if (bandSelection == 2) appState.appMode = APP_MODE_SETTINGS;
+            else if (bandSelection == 3) appState.appMode = APP_MODE_STATUS;
+            else if (bandSelection == 4) {
+                luaScriptCount = 0; luaScriptSelection = 0; luaRunStatus = "";
+                luaOutput = ""; luaShowingOutput = false; luaOutputScroll = 0;
+                luaShowingGui = false; appState.appMode = APP_MODE_LUA_SCRIPTS;
+            } else if (bandSelection == 5) {
+                filePath = "/"; fileEntryCount = 0; fileSelection = 0; fileStatus = "";
+                appState.appMode = APP_MODE_FILE_EXPLORER;
+            } else appState.appMode = APP_MODE_POWER;
+            needRedraw = true;
+        }
+        return;
+    }
+
+    if (appState.appMode == APP_MODE_SUBGHZ_OFFLINE) {
+        if (buttonManager.isPressed(BTN_A)) {
+            subGhzRawService.setSimulationMode(true);
+            appState.appMode = APP_MODE_SUBGHZ;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            subGhzRawService.setSimulationMode(false);
+            appState.appMode = APP_MODE_BAND_SELECT;
+            needRedraw = true;
+        }
+        return;
+    }
+
+    if (appState.appMode == APP_MODE_SUBGHZ) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            previousSubGhzMenuSelection = subGhzMenuSelection;
+            previousSubGhzMenuScrollOffset = subGhzMenuScrollOffset;
+            subGhzMenuSelection = (subGhzMenuSelection + 5) % 6;
+            if (subGhzMenuSelection < subGhzMenuScrollOffset)
+                subGhzMenuScrollOffset = subGhzMenuSelection;
+            if (subGhzMenuSelection == 5 && previousSubGhzMenuSelection == 0)
+                subGhzMenuScrollOffset = 2;
+            subGhzMenuNeedsPartialRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            previousSubGhzMenuSelection = subGhzMenuSelection;
+            previousSubGhzMenuScrollOffset = subGhzMenuScrollOffset;
+            subGhzMenuSelection = (subGhzMenuSelection + 1) % 6;
+            if (subGhzMenuSelection >= subGhzMenuScrollOffset + 4)
+                subGhzMenuScrollOffset = subGhzMenuSelection - 3;
+            if (subGhzMenuSelection == 0) subGhzMenuScrollOffset = 0;
+            subGhzMenuNeedsPartialRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            if (subGhzMenuSelection == 0) {
+                subGhzRawService.startAnalyzer(); appState.appMode = APP_MODE_SUBGHZ_ANALYZER;
+            } else if (subGhzMenuSelection == 1) appState.appMode = APP_MODE_SUBGHZ_RECORD;
+            else if (subGhzMenuSelection == 2) {
+                subGhzFileCount = subGhzRawService.listFiles(subGhzFiles, SUBGHZ_UI_MAX_FILES);
+                subGhzFileSelection = 0;
+                subGhzFileScrollOffset = 0;
+                appState.appMode = APP_MODE_SUBGHZ_EMULATE;
+            } else if (subGhzMenuSelection == 3) appState.appMode = APP_MODE_SUBGHZ_PRESETS;
+            else if (subGhzMenuSelection == 4) {
+                subGhzRawService.startPacketAnalyzer(); appState.appMode = APP_MODE_SUBGHZ_PACKET;
+            } else appState.appMode = APP_MODE_SUBGHZ_RF_TEST;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            appState.appMode = APP_MODE_BAND_SELECT;
+            needRedraw = true;
+        }
+        return;
+    }
+
+    static constexpr float subGhzPresets[] = {315.0f, 433.92f, 868.0f, 915.0f};
+    if (appState.appMode == APP_MODE_SUBGHZ_ANALYZER) {
+        if (buttonManager.isPressed(BTN_A)) {
+            subGhzRawService.lockAnalyzerPeak();
+            subGhzRawService.stopAnalyzer();
+            appState.appMode = APP_MODE_SUBGHZ_RECORD; needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            subGhzRawService.stopAnalyzer(); appState.appMode = APP_MODE_SUBGHZ; needRedraw = true;
+        }
+        return;
+    }
+    if (appState.appMode == APP_MODE_SUBGHZ_RECORD) {
+        if (!subGhzRawService.isRecording() && buttonManager.isPressed(BTN_UP)) {
+            subGhzPreset = (subGhzPreset + 3) % 4;
+            cc1101Manager.setFrequency(subGhzPresets[subGhzPreset]); needRedraw = true;
+        } else if (!subGhzRawService.isRecording() && buttonManager.isPressed(BTN_DOWN)) {
+            subGhzPreset = (subGhzPreset + 1) % 4;
+            cc1101Manager.setFrequency(subGhzPresets[subGhzPreset]); needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            if (subGhzRawService.isRecording()) subGhzRawService.stopRecording();
+            else subGhzRawService.startRecording(cc1101Manager.frequencyMHz());
+            needRedraw = true;
+        } else if (!subGhzRawService.isRecording() && buttonManager.isLongPressed(BTN_B)) {
+            subGhzRawService.setAutoTrigger(!subGhzRawService.autoTriggerEnabled());
+            appState.subGhzAutoTrigger = subGhzRawService.autoTriggerEnabled();
+            appState.markSettingsDirty();
+            needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_B)) {
+            if (subGhzRawService.isRecording()) subGhzRawService.stopRecording();
+            appState.appMode = APP_MODE_SUBGHZ; needRedraw = true;
+        }
+        return;
+    }
+    if (appState.appMode == APP_MODE_SUBGHZ_EMULATE) {
+        if (subGhzFileCount && buttonManager.readButton(BTN_UP) == LOW &&
+            buttonManager.isPressed(BTN_A)) {
+            String renamed;
+            subGhzRawService.renameFile(subGhzFiles[subGhzFileSelection], renamed);
+            subGhzFileCount = subGhzRawService.listFiles(subGhzFiles, SUBGHZ_UI_MAX_FILES);
+            needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_UP) && subGhzFileCount) {
+            subGhzRawService.exportSubFile(subGhzFiles[subGhzFileSelection]); needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_DOWN) && subGhzFileCount) {
+            subGhzRawService.cleanFile(subGhzFiles[subGhzFileSelection]); needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_A) && subGhzFileCount) {
+            subGhzRawService.toggleFavorite(subGhzFiles[subGhzFileSelection]); needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_B) && subGhzFileCount) {
+            subGhzDeleteArmed = true; needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_UP) && subGhzFileCount) {
+            previousSubGhzFileSelection = subGhzFileSelection;
+            previousSubGhzFileScrollOffset = subGhzFileScrollOffset;
+            subGhzFileSelection = (subGhzFileSelection + subGhzFileCount - 1) % subGhzFileCount;
+            if (subGhzFileSelection < subGhzFileScrollOffset) subGhzFileScrollOffset = subGhzFileSelection;
+            if (subGhzFileSelection + 1 == subGhzFileCount && previousSubGhzFileSelection == 0)
+                subGhzFileScrollOffset = subGhzFileCount > 4 ? subGhzFileCount - 4 : 0;
+            subGhzEmulateNeedsPartialRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_DOWN) && subGhzFileCount) {
+            previousSubGhzFileSelection = subGhzFileSelection;
+            previousSubGhzFileScrollOffset = subGhzFileScrollOffset;
+            subGhzFileSelection = (subGhzFileSelection + 1) % subGhzFileCount;
+            if (subGhzFileSelection >= subGhzFileScrollOffset + 4)
+                subGhzFileScrollOffset = subGhzFileSelection - 3;
+            if (subGhzFileSelection == 0) subGhzFileScrollOffset = 0;
+            subGhzEmulateNeedsPartialRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_A) && subGhzFileCount) {
+            if (subGhzDeleteArmed) {
+                subGhzRawService.deleteFile(subGhzFiles[subGhzFileSelection]);
+                subGhzFileCount = subGhzRawService.listFiles(subGhzFiles, SUBGHZ_UI_MAX_FILES);
+                if (subGhzFileSelection >= subGhzFileCount && subGhzFileSelection) --subGhzFileSelection;
+                subGhzDeleteArmed = false;
+            } else subGhzRawService.replay(subGhzFiles[subGhzFileSelection], yieldToUI);
+            needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_B)) {
+            if (subGhzDeleteArmed) { subGhzDeleteArmed = false; needRedraw = true; return; }
+            subGhzRawService.stopReplay(); appState.appMode = APP_MODE_SUBGHZ; needRedraw = true;
+        }
+        return;
+    }
+    if (appState.appMode == APP_MODE_SUBGHZ_PRESETS) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            int preset = static_cast<int>(cc1101Manager.preset());
+            preset = (preset + 4) % 5;
+            cc1101Manager.setPreset(static_cast<Cc1101Preset>(preset));
+            appState.subGhzRadioPreset = preset; appState.markSettingsDirty(); needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            int preset = (static_cast<int>(cc1101Manager.preset()) + 1) % 5;
+            cc1101Manager.setPreset(static_cast<Cc1101Preset>(preset));
+            appState.subGhzRadioPreset = preset; appState.markSettingsDirty(); needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_A)) {
+            subGhzRawService.cycleTriggerThreshold();
+            appState.subGhzTriggerThreshold = subGhzRawService.triggerThresholdDbm();
+            appState.markSettingsDirty(); needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_A)) {
+            subGhzRawService.cycleRegion();
+            appState.subGhzRegion = static_cast<uint8_t>(subGhzRawService.region());
+            appState.markSettingsDirty(); needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_B)) {
+            subGhzRawService.cycleReplayRepeatCount();
+            appState.subGhzReplayRepeats = subGhzRawService.replayRepeatCount();
+            appState.markSettingsDirty(); needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_B)) {
+            appState.appMode = APP_MODE_SUBGHZ; needRedraw = true;
+        }
+        return;
+    }
+    if (appState.appMode == APP_MODE_SUBGHZ_PACKET) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            subGhzPreset = (subGhzPreset + 3) % 4;
+            cc1101Manager.setFrequency(subGhzPresets[subGhzPreset]);
+            subGhzRawService.startPacketAnalyzer(); needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            subGhzPreset = (subGhzPreset + 1) % 4;
+            cc1101Manager.setFrequency(subGhzPresets[subGhzPreset]);
+            subGhzRawService.startPacketAnalyzer(); needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            subGhzRawService.startPacketAnalyzer(); needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            subGhzRawService.stopPacketAnalyzer(); appState.appMode = APP_MODE_SUBGHZ; needRedraw = true;
+        }
+        return;
+    }
+    if (appState.appMode == APP_MODE_SUBGHZ_RF_TEST) {
+        if (buttonManager.isPressed(BTN_A)) {
+            if (subGhzRawService.isRfTesting()) subGhzRawService.stopRfTest();
+            else subGhzRawService.startRfTest();
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            subGhzRawService.stopRfTest(); appState.appMode = APP_MODE_SUBGHZ; needRedraw = true;
+        }
+        return;
+    }
+
     // -------------------------------------------------------------------------
     // CONDITION 1: MAIN MENU
     // -------------------------------------------------------------------------
@@ -215,7 +502,11 @@ void DisplayManager::processInput() {
             if (appState.menuLayout == MENU_LAYOUT_LIST && menuSelection >= menuScrollOffset + 4)
                 menuScrollOffset = menuSelection - 3;
             menuNeedsPartialRedraw = true;
-        } else if (buttonManager.isPressed(BTN_B)) {
+        } else if (buttonManager.isLongPressed(BTN_B)) {
+            radioManager.stopAll();
+            appState.appMode = APP_MODE_BAND_SELECT;
+            needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_B)) {
             menuPage = (menuPage + 1) % MenuCatalog::PAGE_COUNT;
             menuSelection = 0;
             menuScrollOffset = prevMenuScrollOffset = 0;
@@ -442,7 +733,7 @@ void DisplayManager::processInput() {
         }
     }
     // -------------------------------------------------------------------------
-    // CONDITION 5: RF SETTINGS
+    // CONDITION 5: GLOBAL APP SETTINGS
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_SETTINGS) {
         if (buttonManager.isPressed(BTN_UP)) {
@@ -455,6 +746,7 @@ void DisplayManager::processInput() {
             if (settingsSelection == 0) {
                 appState.cyclePowerLevel(1);
                 radioManager.updatePALevel(appState.powerLevel);
+                cc1101Manager.updatePowerLevel();
             } else if (settingsSelection == 1) {
                 appState.cycleDwellTime(1);
             } else if (settingsSelection == 2) {
@@ -471,7 +763,7 @@ void DisplayManager::processInput() {
             }
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
-            appState.appMode = APP_MODE_MENU;
+            appState.appMode = APP_MODE_BAND_SELECT;
             needRedraw = true;
         }
     }
@@ -489,7 +781,7 @@ void DisplayManager::processInput() {
             lastStatusRenderMs = 0;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
-            appState.appMode = APP_MODE_MENU;
+            appState.appMode = APP_MODE_BAND_SELECT;
             needRedraw = true;
         }
     }
@@ -583,7 +875,7 @@ void DisplayManager::processInput() {
                 luaShowingOutput = false; luaShowingGui = false;
                 luaOutputScroll = 0; luaOutput = ""; luaRunStatus = "";
             } else {
-                luaRunStatus = ""; appState.appMode = APP_MODE_MENU;
+                luaRunStatus = ""; appState.appMode = APP_MODE_BAND_SELECT;
             }
             needRedraw = true;
         }
@@ -618,7 +910,7 @@ void DisplayManager::processInput() {
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
             if (filePath == "/") {
-                appState.appMode = APP_MODE_MENU;
+                appState.appMode = APP_MODE_BAND_SELECT;
             } else {
                 const int slash = filePath.lastIndexOf('/');
                 filePath = slash <= 0 ? "/" : filePath.substring(0, slash);
@@ -677,7 +969,7 @@ void DisplayManager::processInput() {
             appState.appMode = powerSelection == 0 ? APP_MODE_REBOOT : APP_MODE_SHUTDOWN;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
-            appState.appMode = APP_MODE_MENU;
+            appState.appMode = APP_MODE_BAND_SELECT;
             needRedraw = true;
         }
     }

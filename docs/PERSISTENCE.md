@@ -8,21 +8,26 @@ Configuration uses ESP32 Preferences namespace:
 appstate
 ```
 
-The current schema version is `5`.
+The current schema version is `6`.
 
 ## Stored keys
 
 | Key | Type | Default | Validation / meaning |
 |---|---|---|---|
-| `schema` | unsigned byte | `5` when first saved | Persistence schema version |
-| `power` | integer | `RF24_PA_MAX` | Must be within RF24 PA enum range |
-| `dwell` | integer | `200` | Clamped to `10–10000` µs |
+| `schema` | unsigned byte | `6` when first saved | Persistence schema version |
+| `power` | integer | `RF24_PA_MAX` | Four global TX levels mapped to nRF24 PA and CC1101 PA-table values |
+| `dwell` | integer | `200` | Global nRF24/CC1101 lab hop dwell, clamped to `10–10000` µs |
 | `target` | unsigned byte | Wi-Fi | Must be one of six target enums |
 | `profile` | unsigned byte | BALANCED | FAST, BALANCED, DEEP, or CUSTOM |
 | `custom` | integer | `40` | Clamped to `10–100` samples |
 | `theme` | unsigned byte | CYBER | Must be one of six themes |
-| `menu_view` | unsigned byte | GRID | GRID or LIST menu layout |
+| `menu_view` | unsigned byte | GRID | GRID or LIST across Main, 2.4 GHz, and Sub-GHz menus |
 | `sniff_sd` | boolean | `false` | Save packet-sniffer records to SD when mounted |
+| `sub_pre` | unsigned byte | OOK 650 kHz | CC1101 modulation preset, validated `0–4` |
+| `sub_reg` | unsigned byte | RX ONLY | Sub-GHz TX policy: RX ONLY, ETSI, or FCC |
+| `sub_trig` | boolean | `true` | Enable RSSI-triggered raw recording |
+| `sub_thr` | signed byte | `-80` | Auto-trigger threshold, clamped to `-90…-70` dBm |
+| `sub_rep` | unsigned byte | `1` | Saved replay count, normalized to 1x, 3x, or 5x |
 | `trace` | unsigned byte | LIVE | LIVE, AVG, MAX, or DELTA; DELTA restores as LIVE |
 | `evt_thr` | unsigned byte | `60` | Clamped to `5–100` |
 | `evt_hys` | unsigned byte | `10` | Clamped to `0–threshold` |

@@ -22,12 +22,14 @@
 #include "services/Watchdog.h"
 #include "drivers/ButtonManager.h"
 #include "drivers/RadioManager.h"
+#include "drivers/Cc1101Manager.h"
 #include "ui/DisplayManager.h"
 #include "services/SerialCommander.h"
 #include "services/SessionRecorder.h"
 #include "services/PerformanceMonitor.h"
 #include "services/RfEnvironmentAnalyzer.h"
 #include "services/LuaEngine.h"
+#include "services/SubGhzRawService.h"
 
 static constexpr unsigned long WAKE_HOLD_MS = 1500;
 
@@ -103,11 +105,24 @@ void setup() {
     if (!luaEngine.begin()) Serial.println("Lua: " + String(luaEngine.lastError()));
 
     // 4. Initialize nRF24L01+ Radio (init() retries internally before failing)
+    // Deselect the optional CC1101 before starting the shared RF SPI bus so an
+    // uninitialized module can never drive MISO during nRF24 discovery.
+    pinMode(CC1101_CSN_PIN, OUTPUT);
+    digitalWrite(CC1101_CSN_PIN, HIGH);
     if (!radioManager.init()) {
         // Keep the UI, status, storage, and Serial diagnostics available. A
         // disconnected module can then be diagnosed without a reboot loop.
         Serial.println("No radio detected; continuing in diagnostics-only mode.");
     }
+
+    if (!cc1101Manager.init()) {
+        Serial.println("CC1101 unavailable: " + String(cc1101Manager.lastError()));
+    }
+    cc1101Manager.setPreset(static_cast<Cc1101Preset>(appState.subGhzRadioPreset));
+    subGhzRawService.setRegion(static_cast<SubGhzRegion>(appState.subGhzRegion));
+    subGhzRawService.setAutoTrigger(appState.subGhzAutoTrigger);
+    subGhzRawService.setTriggerThreshold(appState.subGhzTriggerThreshold);
+    subGhzRawService.setReplayRepeatCount(appState.subGhzReplayRepeats);
 
     // 5. Initialize Hardware Watchdog (3.0s Timeout)
     watchdog.init(WATCHDOG_TIMEOUT_US);
@@ -118,6 +133,7 @@ void setup() {
 // =============================================================================
 void loop() {
     performanceMonitor.tickLoop();
+    subGhzRawService.service();
     rfEnvironmentAnalyzer.service();
     // 1. Reset Watchdog Timer (Heartbeat)
     watchdog.feed();

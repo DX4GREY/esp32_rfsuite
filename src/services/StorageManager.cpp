@@ -41,7 +41,8 @@ bool StorageManager::begin() {
             Serial.println("Storage: FAT volume metadata cannot be read");
         }
         if (!ensureDirectory(SD, "/RFSuite/log") ||
-            !ensureDirectory(SD, "/RFSuite/scripts")) {
+            !ensureDirectory(SD, "/RFSuite/scripts") ||
+            !ensureDirectory(SD, "/RFSuite/SubGHz")) {
             // Keep a successfully mounted card available for read-only tasks
             // such as File Explorer and loading existing Lua scripts. A card
             // with a damaged/read-only FAT volume may reject mkdir(), but

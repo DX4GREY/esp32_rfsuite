@@ -10,7 +10,8 @@
 
 struct AppState {
     // Mode UI & Operasi
-    AppMode appMode = APP_MODE_MENU;
+    AppMode appMode = APP_MODE_BAND_SELECT;
+    RadioBand radioBand = RADIO_BAND_24_GHZ;
 
     // ----- JAMMER STATE -----
     volatile bool jamming = false;
@@ -28,6 +29,11 @@ struct AppState {
     DisplayThemeId displayTheme = DISPLAY_THEME_CYBER;
     MenuLayout menuLayout = MENU_LAYOUT_GRID;
     bool saveSniffPacketsToSd = false;
+    uint8_t subGhzRadioPreset = 1;
+    uint8_t subGhzRegion = 0;
+    bool subGhzAutoTrigger = true;
+    int16_t subGhzTriggerThreshold = -80;
+    uint8_t subGhzReplayRepeats = 1;
 
     // ----- ANALYZER STATE -----
     AnalyzerBand analyzerBand = SCAN_BAND_ALL;

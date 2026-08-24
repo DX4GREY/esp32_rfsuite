@@ -542,5 +542,5 @@ void DisplayManager::renderChannelInspector() {
 // RENDER STATUS SCREEN (COMPACT & FIT)
 // =============================================================================
 // =============================================================================
-// RENDER RF SETTINGS SCREEN (POWER LEVEL & DWELL TIME)
+// Settings rendering lives in SystemScreens.cpp.
 // =============================================================================

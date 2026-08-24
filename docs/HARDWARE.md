@@ -5,6 +5,7 @@
 The firmware targets an ESP32-S3 with:
 
 - one or two nRF24L01+ radios sharing one hardware SPI bus;
+- one optional CC1101 Sub-GHz transceiver on that RF SPI bus;
 - separate CE and CSN pins for each radio;
 - an ST7735 TFT on a separate display SPI connection;
 - four active-low buttons using internal pull-ups.
@@ -53,6 +54,36 @@ The SD controller uses HSPI so it does not contend with the RF24 FSPI bus.
 Pins can be overridden with `SD_CS_PIN` and `SD_MISO_PIN` build flags.
 GPIO 3 is intentionally avoided because it is used by boot/JTAG-related board
 functions.
+
+## CC1101 wiring
+
+The CC1101 shares SCK, MOSI, and MISO with the nRF24 radios. Its chip-select
+must remain independent and all RF modules must use 3.3 V logic and power.
+
+| CC1101 signal | ESP32-S3 GPIO |
+|---|---:|
+| VCC | 3.3 V |
+| GND | GND |
+| SCK | 12 (shared) |
+| MOSI / SI | 11 (shared) |
+| MISO / SO | 13 (shared) |
+| CSN / SS | 3 (default) |
+| GDO0 | 38 (raw capture/replay) |
+| GDO2 | Not required |
+
+GPIO 3 is a strapping/JTAG-related pin on ESP32-S3 boards. The CC1101 CSN
+line idles HIGH, but board variants can differ; override it with
+`-D CC1101_CSN_PIN=<gpio>` in `platformio.ini` when another safe free GPIO is
+available. Do not let CSN be held LOW while the ESP32 resets.
+
+GPIO 38 is the default raw-data connection and can be changed with
+`-D CC1101_GDO0_PIN=<gpio>`. GDO0 is required for Record and Emulate. Verify
+that GPIO 38 is exposed by the selected ESP32-S3 board before wiring it.
+
+The frequency analyzer samples the supported 300–348, 387–464, and 779–928 MHz
+ranges; Record and Packet screens offer 315/433.92/868/915 MHz shortcuts. Use
+an antenna and CC1101 module variant matched to the selected band. Emulate and
+RF Test transmission are compiled only by the `authorized_rf_lab` environment.
 
 The display is initialized as `INITR_BLACKTAB` with rotation `3`. Different ST7735 panel variants may require a different initialization tab, color order, offset, or rotation.
 

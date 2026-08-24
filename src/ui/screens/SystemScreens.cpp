@@ -23,7 +23,7 @@ String formatStorageBytes(uint64_t bytes) {
 
 void DisplayManager::renderSettingsScreen() {
     if (!settingsLayoutDrawn) {
-        drawModernHeader("RF SETTINGS", SPECTRUM_HIGH);
+        drawModernHeader("APP SETTINGS", SPECTRUM_HIGH);
         drawModernFooter("U/D SEL", "A NEXT", "B BACK");
         settingsLayoutDrawn = true;
     }
@@ -54,14 +54,14 @@ void DisplayManager::renderSettingsScreen() {
     else if (appState.powerLevel == RF24_PA_LOW) pwrColor = SPECTRUM_MID;
     else pwrColor = SPECTRUM_LOW;
     drawSettingRow(0, 17, "TX POWER", appState.getPowerLevelName(), pwrColor);
-    drawSettingRow(1, 34, "SAMPLE DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
+    drawSettingRow(1, 34, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
     drawSettingRow(2, 51, "DISPLAY THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
     drawSettingRow(3, 68, "MENU VIEW", appState.getMenuLayoutName(), SPECTRUM_LOW);
     const char* sniffSave = !storageManager.usingSd() ? "NO SD" :
                             (appState.saveSniffPacketsToSd ? "SD CARD" : "OFF");
     const uint16_t sniffColor = !storageManager.usingSd() ? SPECTRUM_CRITICAL :
                                   (appState.saveSniffPacketsToSd ? SPECTRUM_LOW : ST77XX_GRAY);
-    drawSettingRow(4, 85, "SAVE SNIFF", sniffSave, sniffColor);
+    drawSettingRow(4, 85, "SNIFF TO SD", sniffSave, sniffColor);
 
     previousSettingsSelection = settingsSelection;
     previousPowerLevel = static_cast<int>(appState.powerLevel);

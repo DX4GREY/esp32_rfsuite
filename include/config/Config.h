@@ -29,6 +29,16 @@
 #define CE_PIN_2  4
 #define CSN_PIN_2 2
 
+// CC1101 Sub-GHz radio. It shares the nRF24 SPI signals and uses a separate
+// chip-select. Override CC1101_CSN_PIN in build_flags if GPIO 3 is unavailable
+// on the target ESP32-S3 carrier.
+#ifndef CC1101_CSN_PIN
+#define CC1101_CSN_PIN 3
+#endif
+#ifndef CC1101_GDO0_PIN
+#define CC1101_GDO0_PIN 38
+#endif
+
 // Display TFT ST7735 1.8" (128x160 SPI)
 #define TFT_SCK   18
 #define TFT_SDA   17

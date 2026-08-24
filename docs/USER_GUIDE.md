@@ -1,18 +1,94 @@
 # User Guide
 
+## Main menu
+
+After the splash screen, the themed Main Menu provides **2.4 GHz**,
+**Sub-GHz**, Settings, System Info, Lua Scripts, SD Files, and Power. Use
+`UP`/`DOWN` to select and `A` to open.
+
+From the 2.4 GHz radio menu, hold `B` to return to the Main Menu. From the
+Sub-GHz menu, press `B` to return. The Sub-GHz menu contains Analyzer, Record,
+Library, Presets, Packets, and RF Test.
+
+### Sub-GHz Frequency Analyzer
+
+If CC1101 is not detected when Sub-GHz is opened, a warning asks whether to
+enter simulation mode. Simulated screens are explicitly marked `SIM` and show
+generated demonstration data only; they are not real RF measurements and RF
+transmission remains unavailable.
+
+Analyzer continuously samples 20 frequencies across the CC1101 hardware bands
+and displays live RSSI bars. Press `A` to refine the strongest result in 100
+kHz steps, lock it, and open Record. Press `B` to stop scanning.
+
+### Sub-GHz Record Raw
+
+Choose 315, 433.92, 868, or 915 MHz with `UP`/`DOWN`, then press `A` to start
+capturing pulse timings from CC1101 GDO0. Press `A` again to stop and save.
+Recording also stops automatically at 30 seconds or 8,192 pulses. Files are
+stored as `/RFSuite/SubGHz/RAW_<frequency>_<time>.rfr` on the SD card.
+
+While recording, the screen shows a live HIGH/LOW waveform. Horizontal length
+represents pulse duration at approximately 100 microseconds per pixel. The
+trace wraps inside its graph card and uses incremental drawing, so the rest of
+the screen is not cleared on every update.
+
+Auto-trigger is enabled by default: Record first shows `ARM`, then starts pulse
+capture when RSSI crosses the configured threshold. Hold `B` while idle to
+toggle auto-trigger. The metrics line alternates between pulse/RSSI/buffer and
+peak RSSI/noise floor/pulse rate. Saving removes paired glitches shorter than
+80 microseconds, trims long start silence, estimates the timing element, and
+reports a generic PWM/OOK candidate when the pulse pairs are consistent.
+
+### Sub-GHz Library and Emulate
+
+Library lists `.rfr` and Flipper `.sub` files, with favorites sorted first.
+`UP`/`DOWN` selects and `A` replays in the RF-lab build. Hold `A` to toggle a
+favorite, hold `UP` to export `.rfr` as Flipper RAW `.sub`, hold `DOWN` to
+clean a recording again, and press `A` while holding `UP` to rename it to the
+next free `SIGNAL_N` name. Hold `B`, then press `A`, to confirm deletion; tap
+`B` to cancel. Only replay is TX-locked in the analyzer build.
+
+Imported `.sub` files support standard OOK/2-FSK presets, custom CC1101
+register pairs, frequency metadata, and signed `RAW_Data` timing lines.
+
+### Sub-GHz Presets
+
+Choose OOK 270 kHz, OOK 650 kHz, or 2-FSK deviation 2/12/47 kHz with
+`UP`/`DOWN`. Tap `A` to select `RX ONLY`, `ETSI`, or `FCC` TX policy. Hold `A`
+to cycle the auto-trigger threshold from -90 through -70 dBm. Hold `B` to
+select 1x, 3x, or 5x replay; tap `B` to return. Preset, region, trigger, and
+replay-count configuration are persisted.
+
+### Sub-GHz Packet Analyzer
+
+Packet Analyzer uses the CC1101 FIFO and shows frequency, packet count, RSSI,
+LQI, CRC result, and the first eight payload bytes. `UP`/`DOWN` changes the
+frequency preset and `A` clears/restarts capture. Received packets are appended
+to `/RFSuite/SubGHz/packets.csv` when SD is available.
+
+### CC1101 RF Test
+
+Press `A` to start or stop a lab sweep across the four supported presets. This
+screen does not offer manual frequency selection. It is available only in the
+`authorized_rf_lab` build. Region allowlists, clear-channel assessment, a
+10-second TX limit, and a one-second cooldown are enforced. Use it only in an
+authorized, controlled RF setup.
+
 ## Display and navigation model
 
 The TFT operates in 160 × 128 landscape orientation. Full-screen clearing occurs only when changing page layouts. Live screens update dirty graph columns, status fields, or cards to minimize flicker and SPI traffic.
 
-The main menu contains four pages: Analyze, Tools, ENV TEST, and ENV MORE.
-Analyze, Tools, and ENV TEST contain six items; ENV MORE contains two. Settings
-can render them as a 2 × 3 card grid or a four-row scrolling list.
+The 2.4 GHz radio menu contains four pages: Analyze, Tools, ENV TEST, and
+ENV MORE. The global Settings screen can render these pages as a 2 × 3 card
+grid or a four-row scrolling list.
 
 | Main-menu control | Action |
 |---|---|
 | `UP` / `DOWN` | Move selection between cards |
 | `A` | Open selected card |
-| `B` | Advance to the next menu page |
+| Tap `B` | Advance to the next menu page |
+| Hold `B` | Return to Main Menu |
 | `UP` at the first item | Open the previous page at its last item |
 | `DOWN` at the last item | Open the next page at its first item |
 
@@ -135,10 +211,11 @@ Use `UP/DOWN` to select and `A` to advance the value.
 
 | Setting | Values | Notes |
 |---|---|---|
-| TX Power | MIN, LOW, HIGH, MAX | Relevant to the lab transmit profile; RX initialization uses maximum receiver PA/LNA configuration |
-| Sample Dwell | Preset microsecond values | Relevant to the lab transmit profile |
-| Display Theme | CYBER, OCEAN, AMBER, MATRIX, VIOLET, ICE | Changing theme forces one clean page rebuild, then partial rendering resumes |
-| Menu Layout | GRID, LIST | GRID uses cards; LIST shows four scrolling rows |
+| TX Power | MIN, LOW, HIGH, MAX | Applied to both nRF24 and CC1101 lab transmission; CC1101 uses mapped PA-table steps |
+| TX Dwell | Preset microsecond values | Applied to nRF24 hopping and the CC1101 RF Test sweep |
+| Display Theme | CYBER, OCEAN, AMBER, MATRIX, VIOLET, ICE | Applied across Main Menu, both radio sections, and global screens |
+| Menu Layout | GRID, LIST | Applied to Main Menu, the 2.4 GHz catalog, and the Sub-GHz menu |
+| Sniff to SD | OFF, SD CARD | Controls nRF24 packet-sniffer saving when an SD card is mounted |
 
 ### Status
 
@@ -168,6 +245,7 @@ Choose Restart or Shutdown with `UP/DOWN`, confirm with `A`, or cancel with `B`.
 ## Runtime versus persistent state
 
 Themes, profiles, event configuration, trace choice, watch markers, RF Test configuration, and CUSTOM depth are persisted. Freeze, zoom, cursor, baseline, histories, and recording state are runtime-only. See [Persistence](PERSISTENCE.md) for the exact schema.
+
 ## RF Environment pages
 
 The ENV TEST and ENV MORE controls, metrics, limitations, Serial commands, and

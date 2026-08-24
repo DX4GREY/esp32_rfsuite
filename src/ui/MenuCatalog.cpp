@@ -18,9 +18,7 @@ constexpr MenuFeature FEATURES[MenuCatalog::FEATURE_COUNT] = {
 #endif
     {"RADIO DIAG",APP_MODE_RADIO_DIAG,         7, MENU_OPEN_NONE},
     {"PROFILES",  APP_MODE_PROFILES,           8, MENU_OPEN_NONE},
-    {"SETTINGS",  APP_MODE_SETTINGS,           9, MENU_OPEN_NONE},
-    {"SYS INFO",  APP_MODE_STATUS,             10, MENU_OPEN_NONE},
-    {"POWER",     APP_MODE_POWER,              11, MENU_OPEN_STOP_RADIOS}
+    {"PKT SNIFF", APP_MODE_PACKET_SNIFFER,     7, MENU_OPEN_NONE}
     ,{"OCCUPANCY",APP_MODE_ENV_OCCUPANCY,      0, MENU_OPEN_STOP_RADIOS}
     ,{"HEATMAP",  APP_MODE_ENV_HEATMAP,        1, MENU_OPEN_STOP_RADIOS}
     ,{"BURSTS",   APP_MODE_ENV_BURSTS,         4, MENU_OPEN_STOP_RADIOS}
@@ -33,20 +31,16 @@ constexpr MenuFeature FEATURES[MenuCatalog::FEATURE_COUNT] = {
 #else
     ,{"RX ONLY",  APP_MODE_ENV_PROBE,          6, MENU_OPEN_STOP_RADIOS}
 #endif
-    ,{"LUA SCRIPTS",APP_MODE_LUA_SCRIPTS,      9, MENU_OPEN_STOP_RADIOS}
-    ,{"SD FILES", APP_MODE_FILE_EXPLORER,      12, MENU_OPEN_STOP_RADIOS}
-    ,{"PKT SNIFF", APP_MODE_PACKET_SNIFFER,    7, MENU_OPEN_NONE}
 };
 
 constexpr const char* PAGE_TITLES[MenuCatalog::PAGE_COUNT] = {
     "ANALYZE",
     "TOOLS",
     "ENV TEST",
-    "ENV MORE",
-    "SCRIPTING"
+    "ENV MORE"
 };
 
-constexpr uint8_t PAGE_ITEM_COUNTS[MenuCatalog::PAGE_COUNT] = {6, 6, 6, 2, 3};
+constexpr uint8_t PAGE_ITEM_COUNTS[MenuCatalog::PAGE_COUNT] = {6, 4, 6, 2};
 
 }  // namespace
 
