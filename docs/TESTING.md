@@ -56,6 +56,11 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
 - Missing nRF24 offers labelled 2.4 GHz simulation.
 - Missing CC1101 offers labelled Sub-GHz simulation without saving fake RF captures.
 - Simulation cannot start RF Test, replay, or authorized probe transmission.
+- Opening any feature with a held `A` press does not trigger the destination
+  screen when that same press is released.
+- Sub-GHz replay shows live pass, pulse, and percentage progress; `B` can abort.
+- Successful replay remains on its result page; `A` replays the same file and
+  `B` returns to Library.
 - FAST, DIV, R1, and R2 behave as documented.
 - Radio diagnostics do not destabilize acquisition.
 - SPI timeout count remains zero during normal use.

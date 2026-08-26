@@ -12,6 +12,7 @@ This directory is the detailed technical and operating reference for RF24 Suite.
 | [Analyzer Concepts](ANALYZER_CONCEPTS.md) | RF users and developers | Channel mapping, carrier-hit percentages, modes, traces, confidence, events, and limitations |
 | [RF Environment](RF_ENVIRONMENT.md) | RF users and test operators | Occupancy, heatmap, bursts, comparison, score, snapshots, band hints, CLI, and bounded probe |
 | [Data and Storage](DATA_AND_STORAGE.md) | Data users | Serial summaries, LittleFS session layout, buffering, limits, export, and replay |
+| [Sub-GHz](SUB_GHZ.md) | CC1101 users | Analyzer, raw capture, modulation, replay UI, TX-region policy, compatibility, and limits |
 | [Lua Scripting](LUA_SCRIPTING.md) | Script authors | Editor library generation, SD layout, TFT loader, `rf` API, sandbox, design guidance, and examples |
 | [Serial CLI](SERIAL_CLI.md) | Operators and automation | Complete command reference with validation ranges and examples |
 | [v2.0.0 Release Notes](RELEASE_2.0.0.md) | Users and maintainers | Dual-band, CC1101, simulation, UI, safety, and compatibility summary |

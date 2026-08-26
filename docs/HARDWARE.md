@@ -100,6 +100,10 @@ All button pins use `INPUT_PULLUP`; an unpressed button reads high. The firmware
 
 GPIO 9 is also configured as the active-low deep-sleep wake source. Keep this assignment on an RTC-capable GPIO if the board definition is changed.
 
+When a button changes the active application mode, the firmware suppresses
+that held button until release. This prevents an `A` press used to open a
+feature from also triggering the first action on the destination screen.
+
 ## Power integrity
 
 Power instability is the most common cause of radio detection failures and ESP32 brownouts.

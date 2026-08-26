@@ -23,7 +23,8 @@ The interface is designed for a 160 × 128 landscape display. It uses partial/di
 - Optional CC1101 support with OOK/2-FSK presets, RSSI analysis, packet
   inspection, and raw GDO0 capture.
 - Sub-GHz library on `/RFSuite/SubGHz` with clean, favorite, rename, delete,
-  `.rfr` replay, and Flipper RAW `.sub` import/export.
+  `.rfr` replay, Flipper RAW `.sub` import/export, live replay progress, and a
+  persistent replay result screen.
 - Global simulation fallback when nRF24 or CC1101 hardware is missing. Every
   simulated screen is marked `SIM`; simulated data never enables RF output.
 - FreeRTOS mutex protection and contention metrics for the shared nRF24 SPI bus.
@@ -217,6 +218,10 @@ After the splash screen, the Main Menu selects 2.4 GHz, Sub-GHz, Settings,
 System Info, Lua, SD Files, or Power. The 2.4 GHz catalog retains its paged
 feature menu. Choose the `GRID` or `LIST` layout in Settings; the choice applies
 to the global, 2.4 GHz, and Sub-GHz menus.
+
+For CC1101 analyzer/record screens, modulation presets, TX-region policy, raw
+file format, replay progress controls, and remote compatibility, see the
+[Sub-GHz guide](docs/SUB_GHZ.md).
 
 | Control | Main-menu action |
 |---|---|

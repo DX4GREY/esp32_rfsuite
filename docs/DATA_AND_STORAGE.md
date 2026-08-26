@@ -6,6 +6,8 @@
 |---|---|---:|---|
 | User configuration | NVS namespace `appstate` | Yes | Versioned schema and deferred writes |
 | Latest recorded session | SD `/RFSuite/log/rf_session.csv`, LittleFS fallback `/rf_session.csv` | Yes | Replaced when a new session starts |
+| Sub-GHz raw captures | SD `/RFSuite/SubGHz/*.rfr` | Yes | One file per completed CC1101 raw capture |
+| Flipper RAW interchange | SD `/RFSuite/SubGHz/*.sub` | Yes | Imported directly or exported from `.rfr` |
 | Lua application log | SD `/RFSuite/log/lua.log` | Yes | Appended by `rf.log()` |
 | Live, AVG, MAX, baseline | RAM | No | DELTA baseline is deliberately temporary |
 | Waterfall, survey, analyzer events | RAM | No | Rebuilt from new sweeps |

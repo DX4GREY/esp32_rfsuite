@@ -111,7 +111,14 @@ Completed sweeps update all shared analyzer products once: waterfall, occupancy,
 
 - `SessionRecorder.cpp`: buffered LittleFS sessions, size limiting, CSV export, and last-sweep replay.
 - `SubGhzRawService.cpp`: Sub-GHz analyzer, waveform capture, protocol hints,
-  library/import/export, packet logging, simulation, and guarded replay/RF test.
+  library/import/export, packet logging, simulation, guarded replay/RF test,
+  and live replay pulse/pass progress exposed to the UI.
+
+Raw replay remains synchronous to preserve microsecond pulse timing. A
+cooperative callback services input, rendering, and the watchdog between pulse
+batches and long pulse segments. The replay renderer consumes pass/pulse
+progress, keeps abort responsive, and enters a persistent completion/result
+state after the service returns.
 - `PerformanceMonitor.cpp`: smoothed scan/UI duration, maxima, and loop-rate tracking.
 - `SerialCommander.cpp`: CLI routing and machine-readable/diagnostic output.
 - `Watchdog.cpp`: main-loop liveness monitoring.

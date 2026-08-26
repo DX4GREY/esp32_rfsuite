@@ -105,6 +105,39 @@ This resets NVS but does not remove the LittleFS session.
 - Replay selects the last line beginning with `S,`. If that final row is truncated or malformed, replay can fail even when an earlier row was complete; export the file and remove the damaged tail before using an external parser.
 - Starting a new session immediately replaces the previous file.
 
+This section describes 2.4 GHz analyzer-session replay. For CC1101 raw replay,
+use the checks below.
+
+## Sub-GHz raw replay fails
+
+- Flash `authorized_rf_lab`; the default `analyzer` build intentionally blocks TX.
+- Confirm the CC1101 and SD card are detected and GDO0 is wired.
+- Select a TX Region that permits the file frequency. `REGION BLOCKED` means
+  the selected firmware allowlist rejected it.
+- `CHANNEL BUSY` means clear-channel assessment observed RF energy. Wait and
+  retry rather than bypassing the check.
+- `TX COOLDOWN` means the required one-second interval after transmission has
+  not elapsed.
+- Match the CC1101 preset to the source modulation. OOK and 2-FSK are not
+  interchangeable even at the same carrier frequency.
+- Recapture close to the owned transmitter if pulse count is very low, RSSI is
+  weak, or the waveform contains obvious noise.
+- Fixed-code OOK signals are the most likely to replay. Rolling-code,
+  encrypted, challenge-response, and frequency-hopping remotes are not
+  expected to work from a raw capture.
+
+The replay process page remains visible while sending. After success, press
+`A` to replay the same file or `B` to return. A stopped page shows the service
+error and offers the same retry/back controls.
+
+## A button action fires twice after opening a screen
+
+Current firmware consumes held buttons across application-mode transitions.
+If an older build opens a feature and then immediately activates it again when
+`A` is released, update the firmware. On current builds, release the opening
+press before issuing the next action. Also inspect for a stuck switch, missing
+pull-up, excessive contact bounce, or incorrect active-low wiring.
+
 ## USB Serial unavailable
 
 - Use a data-capable cable.

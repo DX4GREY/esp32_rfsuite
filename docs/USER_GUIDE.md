@@ -19,8 +19,9 @@ not real RF measurements. Capture files and every RF transmission remain
 disabled for simulated radios.
 
 Analyzer continuously samples 20 frequencies across the CC1101 hardware bands
-and displays live RSSI bars. Press `A` to refine the strongest result in 100
-kHz steps, lock it, and open Record. Press `B` to stop scanning.
+and displays live RSSI bars, reference guides, frequency endpoints, and a
+highlighted peak. Press `A` to refine the strongest result in 100 kHz steps,
+lock it, and open Record. Press `B` to stop scanning.
 
 ### Sub-GHz Record Raw
 
@@ -29,16 +30,16 @@ capturing pulse timings from CC1101 GDO0. Press `A` again to stop and save.
 Recording also stops automatically at 30 seconds or 8,192 pulses. Files are
 stored as `/RFSuite/SubGHz/RAW_<frequency>_<time>.rfr` on the SD card.
 
-While recording, the screen shows a live HIGH/LOW waveform. Horizontal length
-represents pulse duration at approximately 100 microseconds per pixel. The
-trace wraps inside its graph card and uses incremental drawing, so the rest of
-the screen is not cleared on every update.
+While recording, the screen shows frequency, `READY`/`ARMED`/`REC` state, a
+live HIGH/LOW waveform, pulse count, RSSI, pulse rate, and buffer usage.
+Horizontal length represents pulse duration at approximately 100 microseconds
+per pixel. The trace wraps inside its graph card and uses incremental drawing.
 
-Auto-trigger is enabled by default: Record first shows `ARM`, then starts pulse
+Auto-trigger is enabled by default: Record first shows `ARMED`, then starts pulse
 capture when RSSI crosses the configured threshold. Hold `B` while idle to
-toggle auto-trigger. The metrics line alternates between pulse/RSSI/buffer and
-peak RSSI/noise floor/pulse rate. Saving removes paired glitches shorter than
-80 microseconds, trims long start silence, estimates the timing element, and
+toggle auto-trigger. The metrics panel reports pulse count, live RSSI, pulse
+rate, and buffer usage. Saving removes paired glitches shorter than 80
+microseconds, trims long start silence, estimates the timing element, and
 reports a generic PWM/OOK candidate when the pulse pairs are consistent.
 
 ### Sub-GHz Library and Emulate
@@ -53,6 +54,11 @@ next free `SIGNAL_N` name. Hold `B`, then press `A`, to confirm deletion; tap
 Imported `.sub` files support standard OOK/2-FSK presets, custom CC1101
 register pairs, frequency metadata, and signed `RAW_Data` timing lines.
 
+During replay, a dedicated process screen shows frequency, repeat progress,
+pulse progress, percentage, a progress bar, and RF animation. `B` aborts an
+active transmission. Completion remains visible until the user presses
+`A REPLAY` to send the same file again or `B BACK` to return to Library.
+
 ### Sub-GHz Presets
 
 Choose OOK 270 kHz, OOK 650 kHz, or 2-FSK deviation 2/12/47 kHz with
@@ -60,6 +66,17 @@ Choose OOK 270 kHz, OOK 650 kHz, or 2-FSK deviation 2/12/47 kHz with
 to cycle the auto-trigger threshold from -90 through -70 dBm. Hold `B` to
 select 1x, 3x, or 5x replay; tap `B` to return. Preset, region, trigger, and
 replay-count configuration are persisted.
+
+TX Region is a transmit allowlist, not a modulation or automatic statement of
+local compliance. `RX ONLY` blocks replay and RF Test. `ETSI` and `FCC` enable
+only their firmware-defined frequency ranges; an out-of-policy file reports
+`REGION BLOCKED`.
+
+OOK switches the carrier according to pulse timing and is common in simple
+fixed-code remotes. 2-FSK represents data using two nearby frequencies. The
+preset must match the source signal; sharing 433.92 MHz alone does not make two
+signals compatible. See [Sub-GHz](SUB_GHZ.md) for the complete format,
+compatibility, replay-flow, and safety reference.
 
 ### Sub-GHz Packet Analyzer
 

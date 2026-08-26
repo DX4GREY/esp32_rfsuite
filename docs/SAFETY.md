@@ -10,6 +10,9 @@ RF_LAB_TX_ENABLED=0
 
 Active RF Test code is unavailable in that build. The Tools card shows `RX ONLY`, and Serial transmit commands return an unavailable message. This is the recommended firmware for analysis, demonstrations, development, and general diagnostics.
 
+The same compile-time boundary applies to Sub-GHz raw Replay. Selecting an
+ETSI/FCC policy does not enable TX in the default build.
+
 ## Controlled-lab profile
 
 `authorized_rf_lab` compiles active RF test functionality. It is intended only for controlled work where all of the following are true:
@@ -22,6 +25,11 @@ Active RF Test code is unavailable in that build. The Tools card shows `RX ONLY`
 - a responsible operator can immediately stop the test.
 
 Authorization to assess one device does not automatically authorize interference with every device using the same band.
+
+The `RX ONLY`, `ETSI`, and `FCC` selections are firmware allowlists. They do
+not certify the hardware, grant spectrum authorization, or automatically
+enforce every local rule for power, duty cycle, occupied bandwidth, antenna,
+or equipment approval.
 
 ## Pre-test checklist
 
