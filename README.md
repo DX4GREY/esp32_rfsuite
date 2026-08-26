@@ -45,7 +45,8 @@ The interface is designed for a 160 × 128 landscape display. It uses partial/di
   1/2 Mbps rate, live hexadecimal preview, and Serial dump.
 - `FAST`, `BALANCED`, `DEEP`, and `CUSTOM` analyzer profiles.
 - Independent connectivity diagnostics for both radios.
-- Five-page System Status with live ESP32, radio, build-profile, storage, UI, scan, and SPI timing data.
+- Six-page System Status with live ESP32, nRF24, CC1101/Sub-GHz, build-profile,
+  storage, UI, scan, and SPI timing data.
 - Six selectable display themes: Cyber, Ocean, Amber, Matrix, Violet, and Ice.
 - Versioned NVS configuration with validation, delayed writes, migration, and confirmed factory reset.
 - Native analyzer unit tests and GitHub Actions CI for both firmware profiles.
@@ -328,11 +329,14 @@ the previous `/RFSuite/log/rf_session.csv` is replaced. If no usable card is
 present, recording transparently falls back to LittleFS `/rf_session.csv`.
 
 Lua 5.1 scripts (maximum 32 KiB) can be placed in `/RFSuite/scripts/`, listed
-with `lua list`, and executed with `lua run NAME`. The sandbox exposes
-`rf.millis()`, `rf.peak_channel()`, `rf.level(channel)`, and `rf.log(message)`;
-the last function appends to `/RFSuite/log/lua.log`. File/OS/package loading is
-disabled and each run has an instruction limit. See
-`examples/lua/channel_report.lua` for a minimal example.
+with `lua list`, and executed with `lua run NAME`. The sandbox exposes 2.4 GHz
+analysis/control, custom TFT drawing, button input, and integrated Sub-GHz
+status, analyzer, raw record, Library, and guarded replay APIs. Sub-GHz Lua
+replay uses the native progress/result UI and remains unavailable outside the
+`authorized_rf_lab` build. `rf.log(message)` appends to
+`/RFSuite/log/lua.log`. File/OS/package loading is disabled and each run has an
+instruction limit. See `examples/lua/` for ready-to-copy examples and
+self-tests.
 The complete API and TFT loading workflow are documented in
 [`docs/LUA_SCRIPTING.md`](docs/LUA_SCRIPTING.md).
 
@@ -356,7 +360,9 @@ The Status screen reads live runtime values instead of displaying hard-coded har
 2. **Memory Info** — total, free, and minimum heap, largest allocation block, sketch size, and PSRAM status.
 3. **Radio / Software** — each nRF24 connection or simulation state, scan mode,
    receive-only/lab build, ESP-IDF, and firmware version.
-4. **Performance** — average/maximum sweep time, UI render time, loop rate, SPI mutex wait, and recorder state.
+4. **Sub-GHz Status** — CC1101 connection, frequency, modulation, TX Region,
+   raw recorder, and analyzer state.
+5. **Performance** — average/maximum sweep time, UI render time, loop rate, SPI mutex wait, and recorder state.
 
 A radio status of `CONNECTED` confirms SPI communication with the chip. It does not prove that the antenna, RF matching, or receiver sensitivity is working correctly.
 

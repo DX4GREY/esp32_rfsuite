@@ -227,6 +227,23 @@ void DisplayManager::updateUI() {
 // =============================================================================
 // INPUT NAVIGATION
 // =============================================================================
+bool DisplayManager::replaySubGhzFile(const String& name) {
+    subGhzReplayActive = true;
+    subGhzReplayFinished = false;
+    subGhzReplayFile = name;
+    subGhzReplayFrame = 0;
+    lastSubGhzReplayFrameMs = 0;
+    appState.appMode = APP_MODE_SUBGHZ_EMULATE;
+    needRedraw = true;
+    updateUI();
+    subGhzReplaySucceeded = subGhzRawService.replay(subGhzReplayFile, yieldToUI);
+    subGhzReplayActive = false;
+    subGhzReplayFinished = true;
+    buttonManager.suppressHeldButtons();
+    needRedraw = true;
+    return subGhzReplaySucceeded;
+}
+
 void DisplayManager::processInput() {
     // Every app-mode transition is an input boundary. If it was triggered on
     // button-down, consume the matching release so it cannot fire a second
@@ -384,20 +401,7 @@ void DisplayManager::processInput() {
     }
     if (appState.appMode == APP_MODE_SUBGHZ_EMULATE) {
         auto runSelectedReplay = [&]() {
-            subGhzReplayActive = true;
-            subGhzReplayFinished = false;
-            subGhzReplayFile = subGhzFiles[subGhzFileSelection];
-            subGhzReplayFrame = 0;
-            lastSubGhzReplayFrameMs = 0;
-            needRedraw = true;
-            updateUI();
-            subGhzReplaySucceeded = subGhzRawService.replay(subGhzReplayFile, yieldToUI);
-            subGhzReplayActive = false;
-            subGhzReplayFinished = true;
-            // Replay is a blocking state transition inside the same app mode,
-            // so guard it explicitly as well.
-            buttonManager.suppressHeldButtons();
-            needRedraw = true;
+            replaySubGhzFile(subGhzFiles[subGhzFileSelection]);
         };
 
         // replay() yields back into this input handler while transmitting.
@@ -409,7 +413,10 @@ void DisplayManager::processInput() {
         }
         if (subGhzReplayFinished) {
             if (buttonManager.isShortReleased(BTN_A)) {
-                runSelectedReplay();
+                // Use the recorded replay filename, not the current Library
+                // cursor. This also makes Lua-initiated replay retry the exact
+                // same file even when Library was never opened first.
+                replaySubGhzFile(subGhzReplayFile);
             } else if (buttonManager.isShortReleased(BTN_B)) {
                 subGhzReplayFinished = false;
                 needRedraw = true;
@@ -826,10 +833,10 @@ void DisplayManager::processInput() {
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_STATUS) {
         if (buttonManager.isPressed(BTN_UP)) {
-            statusPage = (statusPage + 4) % 5;
+            statusPage = (statusPage + 5) % 6;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_DOWN)) {
-            statusPage = (statusPage + 1) % 5;
+            statusPage = (statusPage + 1) % 6;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             lastStatusRenderMs = 0;

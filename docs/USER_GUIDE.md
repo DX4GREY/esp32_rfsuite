@@ -243,11 +243,13 @@ Use `UP/DOWN` to change page, `A` to refresh, and `B` to return.
 2. **Memory Info**: total/free/minimum heap, largest allocation, sketch use, PSRAM.
 3. **Radio / Software**: R1/R2 connection or simulation state, scan mode, build
    mode, ESP-IDF, and firmware version.
-4. **Performance**: average/maximum sweep time, UI average, loop rate, SPI wait, session state.
+4. **Sub-GHz Status**: CC1101 connection/simulation, frequency, modulation
+   preset, TX Region, raw recorder state, and analyzer state/peak frequency.
+5. **Performance**: average/maximum sweep time, UI average, loop rate, SPI wait, session state.
 
 `SESSION STOPPED` means the SD/LittleFS recorder is not currently active. It does not mean that the analyzer, filesystem, or device has failed. Start it from Analyze → Logging or with `session start`.
 
-`SYS INFO` page 5, `SD CARD`, shows whether the card was loaded, card type,
+`SYS INFO` page 6, `SD CARD`, shows whether the card was loaded, card type,
 capacity, used and free space, plus the active recorder backend. `NOT DETECTED`
 with recorder `LittleFS` means no usable card was found; `DIRECTORY ERROR`
 means the card mounted but the required RFSuite folders could not be prepared.

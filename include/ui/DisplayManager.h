@@ -15,6 +15,7 @@ public:
     void requestRedraw();
     void showSplash();
     void prepareForShutdown();
+    bool replaySubGhzFile(const String& name);
     void luaGuiBegin(const char* title);
     void luaGuiFooter(const char* left, const char* middle, const char* right);
     void luaGuiClear();

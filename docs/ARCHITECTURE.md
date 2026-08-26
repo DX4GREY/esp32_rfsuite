@@ -119,6 +119,11 @@ cooperative callback services input, rendering, and the watchdog between pulse
 batches and long pulse segments. The replay renderer consumes pass/pulse
 progress, keeps abort responsive, and enters a persistent completion/result
 state after the service returns.
+
+The Lua `rf.subghz_*` bindings call these same manager/service methods. Lua
+replay enters the native DisplayManager replay state rather than implementing
+a second TX path, so native and scripted operation share progress reporting,
+abort behavior, safety gates, and completion controls.
 - `PerformanceMonitor.cpp`: smoothed scan/UI duration, maxima, and loop-rate tracking.
 - `SerialCommander.cpp`: CLI routing and machine-readable/diagnostic output.
 - `Watchdog.cpp`: main-loop liveness monitoring.

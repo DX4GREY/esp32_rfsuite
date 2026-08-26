@@ -5,7 +5,9 @@
 ---@alias RfChannel integer # RF24 channel 0..125.
 ---@alias RfBand "all"|"wifi"|"bt"
 ---@alias RfTrace "live"|"avg"|"max"|"delta"
----@alias RfScreen "spectrum"|"waterfall"|"inspect"|"survey"|"events"|"logging"|"status"|"menu"
+---@alias SubGhzPreset "ook270"|"ook650"|"fsk2"|"fsk12"|"fsk47"
+---@alias SubGhzRegion "rx_only"|"etsi"|"fcc"
+---@alias RfScreen "spectrum"|"waterfall"|"inspect"|"survey"|"events"|"logging"|"status"|"menu"|"subghz"|"subghz_analyzer"|"subghz_record"
 ---@alias RfButton "up"|"down"|"a"|"b"|"right"|"left"
 ---@alias RfColor "white"|"black"|"gray"|"accent"|"cyan"|"green"|"yellow"|"orange"|"red"
 
@@ -19,6 +21,22 @@
 ---@field frozen boolean
 ---@field logging boolean
 ---@field environment_running boolean
+
+---@class SubGhzStatus
+---@field connected boolean
+---@field simulation boolean
+---@field tx_enabled boolean
+---@field frequency number
+---@field preset string
+---@field region string
+---@field recording boolean
+---@field armed boolean
+---@field pulses integer
+---@field rssi integer
+---@field analyzer_running boolean
+---@field analyzer_peak_frequency number
+---@field analyzer_peak_rssi integer
+---@field last_error string
 
 ---@class RfApi
 ---@type RfApi
@@ -84,6 +102,42 @@ function rf.recording(start) end
 ---@param start boolean
 ---@return boolean True when the requested operation succeeded.
 function rf.environment(start) end
+
+---Return current CC1101, analyzer, raw recorder, and TX-policy status.
+---@return SubGhzStatus
+function rf.subghz_status() end
+
+---Set a supported CC1101 frequency in MHz.
+---@param frequency_mhz number
+---@return boolean True when the frequency was accepted.
+function rf.subghz_set_frequency(frequency_mhz) end
+
+---Select and persist a CC1101 modulation preset.
+---@param preset SubGhzPreset
+function rf.subghz_set_preset(preset) end
+
+---Select and persist the Sub-GHz TX allowlist; this does not itself transmit.
+---@param region SubGhzRegion
+function rf.subghz_set_region(region) end
+
+---Start or stop the CC1101 frequency analyzer.
+---@param start boolean
+function rf.subghz_analyzer(start) end
+
+---Start or stop raw GDO0 recording, optionally tuning first.
+---@param start boolean
+---@param frequency_mhz? number Default: `current frequency`.
+---@return boolean True when the requested operation succeeded.
+function rf.subghz_record(start, frequency_mhz) end
+
+---List available .rfr and Flipper RAW .sub files.
+---@return string[] Up to 32 safe library filenames.
+function rf.subghz_files() end
+
+---Replay one library file with the native progress/result UI; unavailable in analyzer builds.
+---@param filename string
+---@return boolean True when replay completed successfully.
+function rf.subghz_replay(filename) end
 
 ---Choose the TFT screen shown after the script exits.
 ---@param screen RfScreen

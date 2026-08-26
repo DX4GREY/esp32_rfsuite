@@ -3,7 +3,9 @@
 #include <dirent.h>
 #include "core/AppState.h"
 #include "drivers/RadioManager.h"
+#include "drivers/Cc1101Manager.h"
 #include "services/SessionRecorder.h"
+#include "services/SubGhzRawService.h"
 #include "services/RfEnvironmentAnalyzer.h"
 #include "core/RfEnvironmentState.h"
 #include "ui/DisplayManager.h"
@@ -25,7 +27,9 @@ LuaEngine luaEngine;
   "---@alias RfChannel integer # RF24 channel 0..125.",
   "---@alias RfBand \"all\"|\"wifi\"|\"bt\"",
   "---@alias RfTrace \"live\"|\"avg\"|\"max\"|\"delta\"",
-  "---@alias RfScreen \"spectrum\"|\"waterfall\"|\"inspect\"|\"survey\"|\"events\"|\"logging\"|\"status\"|\"menu\"",
+  "---@alias SubGhzPreset \"ook270\"|\"ook650\"|\"fsk2\"|\"fsk12\"|\"fsk47\"",
+  "---@alias SubGhzRegion \"rx_only\"|\"etsi\"|\"fcc\"",
+  "---@alias RfScreen \"spectrum\"|\"waterfall\"|\"inspect\"|\"survey\"|\"events\"|\"logging\"|\"status\"|\"menu\"|\"subghz\"|\"subghz_analyzer\"|\"subghz_record\"",
   "---@alias RfButton \"up\"|\"down\"|\"a\"|\"b\"|\"right\"|\"left\"",
   "---@alias RfColor \"white\"|\"black\"|\"gray\"|\"accent\"|\"cyan\"|\"green\"|\"yellow\"|\"orange\"|\"red\"",
   "",
@@ -38,7 +42,23 @@ LuaEngine luaEngine;
   "---@field radios integer",
   "---@field frozen boolean",
   "---@field logging boolean",
-  "---@field environment_running boolean"
+  "---@field environment_running boolean",
+  "",
+  "---@class SubGhzStatus",
+  "---@field connected boolean",
+  "---@field simulation boolean",
+  "---@field tx_enabled boolean",
+  "---@field frequency number",
+  "---@field preset string",
+  "---@field region string",
+  "---@field recording boolean",
+  "---@field armed boolean",
+  "---@field pulses integer",
+  "---@field rssi integer",
+  "---@field analyzer_running boolean",
+  "---@field analyzer_peak_frequency number",
+  "---@field analyzer_peak_rssi integer",
+  "---@field last_error string"
  ],
  "functions":[
   {"name":"millis","description":"Return the device uptime.","returns":[{"type":"integer","description":"Milliseconds since boot."}]},
@@ -56,6 +76,14 @@ LuaEngine luaEngine;
   {"name":"toggle_watch","description":"Toggle a watched-channel marker.","params":[{"name":"channel","type":"RfChannel"}]},
   {"name":"recording","description":"Start a new recording session or stop recording.","params":[{"name":"start","type":"boolean"}],"returns":[{"type":"boolean","description":"True when the requested operation succeeded."}]},
   {"name":"environment","description":"Start or stop passive occupancy analysis.","params":[{"name":"start","type":"boolean"}],"returns":[{"type":"boolean","description":"True when the requested operation succeeded."}]},
+  {"name":"subghz_status","description":"Return current CC1101, analyzer, raw recorder, and TX-policy status.","returns":[{"type":"SubGhzStatus"}]},
+  {"name":"subghz_set_frequency","description":"Set a supported CC1101 frequency in MHz.","params":[{"name":"frequency_mhz","type":"number"}],"returns":[{"type":"boolean","description":"True when the frequency was accepted."}]},
+  {"name":"subghz_set_preset","description":"Select and persist a CC1101 modulation preset.","params":[{"name":"preset","type":"SubGhzPreset"}]},
+  {"name":"subghz_set_region","description":"Select and persist the Sub-GHz TX allowlist; this does not itself transmit.","params":[{"name":"region","type":"SubGhzRegion"}]},
+  {"name":"subghz_analyzer","description":"Start or stop the CC1101 frequency analyzer.","params":[{"name":"start","type":"boolean"}]},
+  {"name":"subghz_record","description":"Start or stop raw GDO0 recording, optionally tuning first.","params":[{"name":"start","type":"boolean"},{"name":"frequency_mhz","type":"number","default":"current frequency"}],"returns":[{"type":"boolean","description":"True when the requested operation succeeded."}]},
+  {"name":"subghz_files","description":"List available .rfr and Flipper RAW .sub files.","returns":[{"type":"string[]","description":"Up to 32 safe library filenames."}]},
+  {"name":"subghz_replay","description":"Replay one library file with the native progress/result UI; unavailable in analyzer builds.","params":[{"name":"filename","type":"string"}],"returns":[{"type":"boolean","description":"True when replay completed successfully."}]},
   {"name":"open_screen","description":"Choose the TFT screen shown after the script exits.","params":[{"name":"screen","type":"RfScreen"}]},
   {"name":"gui_begin","description":"Open and clear the protected 152 x 86 Lua canvas.","params":[{"name":"title","type":"string","default":"\"LUA GUI\""}]},
   {"name":"gui_footer","description":"Set the three firmware footer labels.","params":[{"name":"left","type":"string","default":"\"\""},{"name":"middle","type":"string","default":"\"\""},{"name":"right","type":"string","default":"\"\""}]},
@@ -79,6 +107,7 @@ constexpr size_t MAX_SCRIPT_BYTES = 32U * 1024U;
 constexpr int MAX_VM_INSTRUCTIONS = 200000;
 Stream* activeOutput = nullptr;
 int instructionBudget = 0;
+bool safeName(const String& name);
 
 int luaPrint(lua_State* state) {
     if (!activeOutput) return 0;
@@ -184,6 +213,122 @@ int rfEnvironment(lua_State* state) {
     lua_pushboolean(state, result); return 1;
 }
 
+int rfSubGhzStatus(lua_State* state) {
+    lua_newtable(state);
+#define SUB_FIELD_INT(name, value) lua_pushinteger(state, value); lua_setfield(state, -2, name)
+#define SUB_FIELD_NUM(name, value) lua_pushnumber(state, value); lua_setfield(state, -2, name)
+#define SUB_FIELD_BOOL(name, value) lua_pushboolean(state, value); lua_setfield(state, -2, name)
+#define SUB_FIELD_STR(name, value) lua_pushstring(state, value); lua_setfield(state, -2, name)
+    SUB_FIELD_BOOL("connected", cc1101Manager.isConnected());
+    SUB_FIELD_BOOL("simulation", subGhzRawService.simulationMode());
+#if RF_LAB_TX_ENABLED
+    SUB_FIELD_BOOL("tx_enabled", true);
+#else
+    SUB_FIELD_BOOL("tx_enabled", false);
+#endif
+    SUB_FIELD_NUM("frequency", cc1101Manager.frequencyMHz());
+    SUB_FIELD_STR("preset", cc1101Manager.presetName());
+    SUB_FIELD_STR("region", subGhzRawService.regionName());
+    SUB_FIELD_BOOL("recording", subGhzRawService.isRecording());
+    SUB_FIELD_BOOL("armed", subGhzRawService.isArmed());
+    SUB_FIELD_INT("pulses", subGhzRawService.pulseCount());
+    SUB_FIELD_INT("rssi", subGhzRawService.liveRssiDbm());
+    SUB_FIELD_BOOL("analyzer_running", subGhzRawService.analyzerRunning());
+    SUB_FIELD_NUM("analyzer_peak_frequency", subGhzRawService.analyzerPeakFrequency());
+    SUB_FIELD_INT("analyzer_peak_rssi", subGhzRawService.analyzerPeakRssi());
+    SUB_FIELD_STR("last_error", subGhzRawService.lastError());
+#undef SUB_FIELD_INT
+#undef SUB_FIELD_NUM
+#undef SUB_FIELD_BOOL
+#undef SUB_FIELD_STR
+    return 1;
+}
+
+bool supportedSubGhzFrequency(float mhz) {
+    return (mhz >= 300.0f && mhz <= 348.0f) ||
+           (mhz >= 387.0f && mhz <= 464.0f) ||
+           (mhz >= 779.0f && mhz <= 928.0f);
+}
+
+int rfSubGhzSetFrequency(lua_State* state) {
+    const float mhz = luaL_checknumber(state, 1);
+    luaL_argcheck(state, supportedSubGhzFrequency(mhz), 1,
+                  "frequency must be in 300..348, 387..464, or 779..928 MHz");
+    lua_pushboolean(state, cc1101Manager.setFrequency(mhz));
+    return 1;
+}
+
+int rfSubGhzSetPreset(lua_State* state) {
+    String preset = luaL_checkstring(state, 1); preset.toLowerCase();
+    Cc1101Preset value;
+    if (preset == "ook270") value = Cc1101Preset::OOK_270;
+    else if (preset == "ook650") value = Cc1101Preset::OOK_650;
+    else if (preset == "fsk2") value = Cc1101Preset::FSK_2K;
+    else if (preset == "fsk12") value = Cc1101Preset::FSK_12K;
+    else if (preset == "fsk47") value = Cc1101Preset::FSK_47K;
+    else return luaL_error(state, "preset must be ook270, ook650, fsk2, fsk12, or fsk47");
+    cc1101Manager.setPreset(value);
+    appState.subGhzRadioPreset = static_cast<uint8_t>(value);
+    appState.markSettingsDirty();
+    return 0;
+}
+
+int rfSubGhzSetRegion(lua_State* state) {
+    String region = luaL_checkstring(state, 1); region.toLowerCase();
+    SubGhzRegion value;
+    if (region == "rx_only") value = SubGhzRegion::RX_ONLY;
+    else if (region == "etsi") value = SubGhzRegion::ETSI;
+    else if (region == "fcc") value = SubGhzRegion::FCC;
+    else return luaL_error(state, "region must be rx_only, etsi, or fcc");
+    subGhzRawService.setRegion(value);
+    appState.subGhzRegion = static_cast<uint8_t>(value);
+    appState.markSettingsDirty();
+    return 0;
+}
+
+int rfSubGhzAnalyzer(lua_State* state) {
+    if (lua_toboolean(state, 1)) subGhzRawService.startAnalyzer();
+    else subGhzRawService.stopAnalyzer();
+    return 0;
+}
+
+int rfSubGhzRecord(lua_State* state) {
+    const bool start = lua_toboolean(state, 1);
+    bool result;
+    if (start) {
+        const float mhz = lua_gettop(state) >= 2 ? luaL_checknumber(state, 2) :
+                                                  cc1101Manager.frequencyMHz();
+        luaL_argcheck(state, supportedSubGhzFrequency(mhz), 2,
+                      "frequency must be in 300..348, 387..464, or 779..928 MHz");
+        result = subGhzRawService.startRecording(mhz);
+    } else result = subGhzRawService.stopRecording();
+    lua_pushboolean(state, result);
+    return 1;
+}
+
+int rfSubGhzFiles(lua_State* state) {
+    String names[32];
+    const size_t count = subGhzRawService.listFiles(names, 32);
+    lua_createtable(state, count, 0);
+    for (size_t i = 0; i < count; ++i) {
+        lua_pushstring(state, names[i].c_str());
+        lua_rawseti(state, -2, i + 1);
+    }
+    return 1;
+}
+
+int rfSubGhzReplay(lua_State* state) {
+#if RF_LAB_TX_ENABLED
+    const String name = luaL_checkstring(state, 1);
+    luaL_argcheck(state, safeName(name) && (name.endsWith(".rfr") || name.endsWith(".sub")),
+                  1, "filename must be a safe .rfr or .sub library name");
+    lua_pushboolean(state, displayManager.replaySubGhzFile(name));
+    return 1;
+#else
+    return luaL_error(state, "Sub-GHz replay is disabled in analyzer build");
+#endif
+}
+
 int rfOpen(lua_State* state) {
     const char* screen = luaL_checkstring(state, 1);
     if (!strcmp(screen, "spectrum")) appState.appMode = APP_MODE_ANALYZER_SPECTRUM;
@@ -194,6 +339,11 @@ int rfOpen(lua_State* state) {
     else if (!strcmp(screen, "logging")) appState.appMode = APP_MODE_LOGGING;
     else if (!strcmp(screen, "status")) appState.appMode = APP_MODE_STATUS;
     else if (!strcmp(screen, "menu")) appState.appMode = APP_MODE_MENU;
+    else if (!strcmp(screen, "subghz")) appState.appMode = APP_MODE_SUBGHZ;
+    else if (!strcmp(screen, "subghz_analyzer")) {
+        subGhzRawService.startAnalyzer(); appState.appMode = APP_MODE_SUBGHZ_ANALYZER;
+    }
+    else if (!strcmp(screen, "subghz_record")) appState.appMode = APP_MODE_SUBGHZ_RECORD;
     else return luaL_error(state, "unknown screen");
     return 0;
 }
@@ -328,6 +478,14 @@ bool LuaEngine::run(const String& requestedName, Stream& output) {
     lua_pushcfunction(state, rfWatch); lua_setfield(state, -2, "toggle_watch");
     lua_pushcfunction(state, rfSession); lua_setfield(state, -2, "recording");
     lua_pushcfunction(state, rfEnvironment); lua_setfield(state, -2, "environment");
+    lua_pushcfunction(state, rfSubGhzStatus); lua_setfield(state, -2, "subghz_status");
+    lua_pushcfunction(state, rfSubGhzSetFrequency); lua_setfield(state, -2, "subghz_set_frequency");
+    lua_pushcfunction(state, rfSubGhzSetPreset); lua_setfield(state, -2, "subghz_set_preset");
+    lua_pushcfunction(state, rfSubGhzSetRegion); lua_setfield(state, -2, "subghz_set_region");
+    lua_pushcfunction(state, rfSubGhzAnalyzer); lua_setfield(state, -2, "subghz_analyzer");
+    lua_pushcfunction(state, rfSubGhzRecord); lua_setfield(state, -2, "subghz_record");
+    lua_pushcfunction(state, rfSubGhzFiles); lua_setfield(state, -2, "subghz_files");
+    lua_pushcfunction(state, rfSubGhzReplay); lua_setfield(state, -2, "subghz_replay");
     lua_pushcfunction(state, rfOpen); lua_setfield(state, -2, "open_screen");
     lua_pushcfunction(state, rfGuiBegin); lua_setfield(state, -2, "gui_begin");
     lua_pushcfunction(state, rfGuiFooter); lua_setfield(state, -2, "gui_footer");

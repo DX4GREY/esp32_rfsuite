@@ -127,10 +127,46 @@ status fields are snapshots; call the function again to obtain newer data.
 | `rf.recording(true|false)` | Start a new session or stop recording; returns success |
 | `rf.environment(true|false)` | Start or stop passive occupancy analysis; returns success |
 
+### Sub-GHz and CC1101
+
+The Sub-GHz Lua API uses the same `Cc1101Manager`, `SubGhzRawService`, storage,
+TX-region checks, cooldown, clear-channel assessment, and replay UI as the
+native menus. It does not provide a bypass around firmware safety controls.
+
+| Function | Behavior |
+|---|---|
+| `rf.subghz_status()` | Return CC1101, analyzer, recorder, peak, simulation, TX-build, region, and error fields |
+| `rf.subghz_set_frequency(mhz)` | Tune within `300..348`, `387..464`, or `779..928` MHz |
+| `rf.subghz_set_preset(name)` | Select `ook270`, `ook650`, `fsk2`, `fsk12`, or `fsk47` and persist it |
+| `rf.subghz_set_region(name)` | Select and persist `rx_only`, `etsi`, or `fcc`; this does not transmit |
+| `rf.subghz_analyzer(true|false)` | Start or stop the 20-point CC1101 analyzer |
+| `rf.subghz_record(true[,mhz])` | Start raw capture at an optional frequency, or pass `false` to stop/save |
+| `rf.subghz_files()` | Return up to 32 `.rfr`/`.sub` Library filenames |
+| `rf.subghz_replay(filename)` | Replay through the native progress/result UI in `authorized_rf_lab` |
+
+`rf.subghz_status()` returns `connected`, `simulation`, `tx_enabled`,
+`frequency`, `preset`, `region`, `recording`, `armed`, `pulses`, `rssi`,
+`analyzer_running`, `analyzer_peak_frequency`, `analyzer_peak_rssi`, and
+`last_error`.
+
+Raw recording requires CC1101 GDO0 and SD storage. Starting a recording from
+Lua leaves it active after the one-shot script exits, allowing the script to
+open the native Record screen. Replay accepts safe Library basenames only and
+requires `.rfr` or `.sub`. In the normal `analyzer` build it raises a Lua error
+before any TX attempt. In `authorized_rf_lab`, it opens the same animated live
+progress page used by Library, honors `B` abort, and remains on the completion
+or stopped result page after the Lua call returns.
+
+Setting `etsi` or `fcc` only changes the firmware allowlist. It does not grant
+authorization or guarantee compliance. See [Sub-GHz](SUB_GHZ.md) and
+[Safety](SAFETY.md).
+
 ### TFT navigation
 
 `rf.open_screen(name)` changes to one of `spectrum`, `waterfall`, `inspect`,
-`survey`, `events`, `logging`, `status`, or `menu` after the script finishes.
+`survey`, `events`, `logging`, `status`, `menu`, `subghz`,
+`subghz_analyzer`, or `subghz_record` after the script finishes. Opening
+`subghz_analyzer` also starts its analyzer service.
 
 ### Custom TFT GUI
 
@@ -185,24 +221,30 @@ Ready-to-copy scripts are available in `examples/lua/`:
 | `08_stop_recording.lua` | Stop CSV recording |
 | `09_environment_start.lua` | Start passive environment sampling |
 | `10_channel_inspect.lua` | Freeze and inspect the current peak channel |
+| `11_subghz_status.lua` | Print CC1101, recorder, analyzer, and TX-policy status |
+| `12_subghz_record_433.lua` | Configure OOK 433.92 MHz, start raw capture, and open Record |
+| `13_subghz_library.lua` | List `.rfr` and `.sub` Library files |
+| `14_subghz_replay.lua` | Replay one owned Library file with the native UI in the RF-lab build |
 | `30_custom_gui.lua` | Render a custom RF dashboard inside the firmware frame |
 | `40_snake_game.lua` | Interactive Snake using all four hardware buttons |
 | `90_api_self_test.lua` | Validate status, spectrum, levels, and range checks |
 | `91_control_self_test.lua` | Test cursor/freeze controls and invalid arguments |
 | `92_integration_self_test.lua` | Test SD logging and environment start/stop |
 | `93_rf_lab_self_test.lua` | Test authorized RF start/stop and target validation |
+| `94_subghz_self_test.lua` | Non-transmitting Sub-GHz status, Library, and validation tests |
 
 Copy the desired files to `/RFSuite/scripts/` on the SD card.
 
 ### Running the Lua self-tests
 
-Copy the three `9x_*_self_test.lua` files to `/RFSuite/scripts/`, then run them
+Copy the `9x_*_self_test.lua` files to `/RFSuite/scripts/`, then run them
 from the TFT or Serial:
 
 ```text
 lua run 90_api_self_test
 lua run 91_control_self_test
 lua run 92_integration_self_test
+lua run 94_subghz_self_test
 ```
 
 Each test prints individual `PASS`/`FAIL` lines followed by a summary. The API
@@ -214,6 +256,9 @@ The RF lab self-test must only be run in a shielded, explicitly authorized RF
 setup with the `authorized_rf_lab` firmware. It starts the Wi-Fi lab target and
 stops it immediately, then verifies that an invalid target is rejected. On the
 normal `analyzer` build it prints `SKIP`; active RF remains compiled out.
+
+The Sub-GHz self-test does not transmit or start recording. It verifies status
+and Library return types plus invalid frequency, preset, and region rejection.
 
 Read a full spectrum and log channels above 70%:
 
@@ -272,7 +317,10 @@ button processing and scanning resume after it exits.
 - Remember that displayed activity is a relative carrier-hit percentage, not
   calibrated RSSI or dBm.
 - Check boolean results from `rf.recording()`, `rf.environment()`, and
-  `rf.lab_start()` instead of assuming the operation started.
+  Sub-GHz operations instead of assuming the operation started.
+- Check `rf.subghz_status().tx_enabled` before presenting a replay action, but
+  still handle errors from `rf.subghz_replay()` because region, hardware,
+  storage, cooldown, and clear-channel checks can reject it.
 - Wrap expected argument failures with `pcall`; an unhandled Lua error stops the
   whole script and is reported on Serial/TFT.
 - Use `rf.delay()` rather than a busy-wait loop. Each call is limited to 1000 ms.

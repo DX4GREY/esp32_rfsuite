@@ -183,3 +183,22 @@ analyze and record but cannot replay. The `authorized_rf_lab` artifact enables
 guarded replay and RF Test. Use active transmission only with owned equipment,
 explicit authorization, suitable RF containment, and compliance with local
 spectrum rules.
+
+## Lua integration
+
+Lua scripts can inspect and control the same Sub-GHz services through
+`rf.subghz_status`, `rf.subghz_set_frequency`, `rf.subghz_set_preset`,
+`rf.subghz_set_region`, `rf.subghz_analyzer`, `rf.subghz_record`,
+`rf.subghz_files`, and `rf.subghz_replay`. Replay uses the native progress and
+result screens and remains compile-gated in `authorized_rf_lab`; Lua cannot
+bypass TX Region, clear-channel assessment, cooldown, or duration limits.
+
+See [Lua Scripting](LUA_SCRIPTING.md) for signatures, examples, generated
+LuaLS definitions, and the non-transmitting Sub-GHz self-test.
+
+## System Status integration
+
+System Info includes a dedicated `SUB-GHz STATUS` page showing CC1101
+connection or simulation, current frequency, modulation preset, TX Region,
+raw recorder state/pulse count, and analyzer state/peak frequency. Use
+`UP`/`DOWN` to reach the page and `A` to refresh immediately.

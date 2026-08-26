@@ -61,6 +61,10 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
 - Sub-GHz replay shows live pass, pulse, and percentage progress; `B` can abort.
 - Successful replay remains on its result page; `A` replays the same file and
   `B` returns to Library.
+- `tools/generate_lua_library.py --check` confirms every registered
+  `rf.subghz_*` binding is represented in the generated LuaLS library.
+- `94_subghz_self_test.lua` passes without transmitting and rejects invalid
+  frequency, preset, and region arguments.
 - FAST, DIV, R1, and R2 behave as documented.
 - Radio diagnostics do not destabilize acquisition.
 - SPI timeout count remains zero during normal use.

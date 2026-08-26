@@ -1,9 +1,11 @@
 #include "ui/DisplayManager.h"
 #include "ui/DisplaySupport.h"
 #include "drivers/RadioManager.h"
+#include "drivers/Cc1101Manager.h"
 #include "services/PerformanceMonitor.h"
 #include "services/SessionRecorder.h"
 #include "services/StorageManager.h"
+#include "services/SubGhzRawService.h"
 
 using namespace DisplayUi;
 
@@ -89,7 +91,8 @@ void DisplayManager::renderSettingsScreen() {
 // =============================================================================
 void DisplayManager::renderStatusScreen() {
     static const char* pageTitles[] = {
-        "DEVICE INFO", "MEMORY INFO", "RADIO / SW", "PERFORMANCE", "SD CARD"
+        "DEVICE INFO", "MEMORY INFO", "RADIO / SW", "SUB-GHz STATUS",
+        "PERFORMANCE", "SD CARD"
     };
     const char* labels[6];
     String values[6];
@@ -135,6 +138,32 @@ void DisplayManager::renderStatusScreen() {
         colors[2] = SPECTRUM_ACCENT;
         colors[3] = SPECTRUM_HIGH;
     } else if (statusPage == 3) {
+        const bool connected = cc1101Manager.isConnected();
+        const bool simulated = subGhzRawService.simulationMode();
+        labels[0] = "CC1101";
+        values[0] = simulated ? "SIMULATED" : (connected ? "CONNECTED" : "NOT FOUND");
+        labels[1] = "FREQUENCY";
+        values[1] = String(cc1101Manager.frequencyMHz(), 2) + " MHz";
+        labels[2] = "MODULATION";
+        values[2] = cc1101Manager.presetName();
+        labels[3] = "TX REGION";
+        values[3] = subGhzRawService.regionName();
+        labels[4] = "RAW RECORD";
+        values[4] = subGhzRawService.isArmed() ? "ARMED" :
+                    (subGhzRawService.isRecording() ?
+                     String(subGhzRawService.pulseCount()) + " pulses" : "STOPPED");
+        labels[5] = "ANALYZER";
+        values[5] = subGhzRawService.analyzerRunning() ?
+                    String(subGhzRawService.analyzerPeakFrequency(), 2) + " MHz" : "STOPPED";
+        colors[0] = simulated ? SPECTRUM_HIGH :
+                    (connected ? SPECTRUM_LOW : SPECTRUM_CRITICAL);
+        colors[1] = SPECTRUM_ACCENT;
+        colors[2] = SPECTRUM_MID;
+        colors[3] = subGhzRawService.region() == SubGhzRegion::RX_ONLY ?
+                    ST77XX_GRAY : SPECTRUM_HIGH;
+        colors[4] = subGhzRawService.isRecording() ? SPECTRUM_CRITICAL : ST77XX_GRAY;
+        colors[5] = subGhzRawService.analyzerRunning() ? SPECTRUM_LOW : ST77XX_GRAY;
+    } else if (statusPage == 4) {
         const PerformanceSnapshot perf = performanceMonitor.snapshot();
         labels[0] = "SWEEP AVG"; values[0] = String(perf.averageSweepUs / 1000.0f, 1) + " ms";
         labels[1] = "SWEEP MAX"; values[1] = String(perf.maxSweepUs / 1000.0f, 1) + " ms";
@@ -170,7 +199,7 @@ void DisplayManager::renderStatusScreen() {
         tft.setCursor(139, 3);
         tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
         tft.print(statusPage + 1);
-        tft.print("/5");
+        tft.print("/6");
         tft.fillRoundRect(5, 17, 150, 86, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
         drawModernFooter("U/D PAGE", "A REF", "B BACK");
