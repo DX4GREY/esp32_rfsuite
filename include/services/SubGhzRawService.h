@@ -11,6 +11,7 @@ public:
     bool startRecording(float frequencyMHz);
     bool stopRecording();
     void service();
+    void prepareForShutdown();
     bool isRecording() const { return recording; }
     uint32_t pulseCount() const { return capturedCount; }
     uint32_t elapsedMs() const;

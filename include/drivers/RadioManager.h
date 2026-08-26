@@ -34,6 +34,7 @@ public:
 
     // Utility
     void stopAll();
+    bool stopAllAndWait(uint32_t timeoutMs = 1000);
     void updatePALevel(rf24_pa_dbm_e pwr);
     bool isConnected();
     bool isRadio1Connected();

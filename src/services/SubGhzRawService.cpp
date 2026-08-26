@@ -271,6 +271,24 @@ void SubGhzRawService::service() {
 #endif
 }
 
+void SubGhzRawService::prepareForShutdown() {
+    // Do not analyze or write a capture while the sleep code is stopping the
+    // other CPU and disabling peripherals.
+    abortReplay = true;
+    if (recording && !simulation && !armed) {
+        detachInterrupt(digitalPinToInterrupt(CC1101_GDO0_PIN));
+    }
+    recording = false;
+    armed = false;
+    analyzing = false;
+    packetAnalyzing = false;
+    rfTesting = false;
+    if (!simulation && cc1101Manager.isConnected()) {
+        cc1101Manager.setRawData(false);
+        cc1101Manager.idle();
+    }
+}
+
 uint32_t SubGhzRawService::elapsedMs() const {
     return recording && !armed ? millis() - recordingStartedMs : 0;
 }

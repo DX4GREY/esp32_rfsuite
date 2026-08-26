@@ -2,7 +2,7 @@
 #include <Arduino.h>
 class RfAuthorizedProbe {
 public:
-    bool start(); void stop();
+    bool start(); void stop(); bool stopAndWait(uint32_t timeoutMs = 1000);
     bool isRunning() const { return running; }
     uint16_t packetsSent() const { return sent; }
 private:

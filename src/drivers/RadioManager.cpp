@@ -175,9 +175,9 @@ bool RadioManager::init() {
     radio.ce(LOW);
     radio2.ce(LOW);
 
-    // Initialize the custom SPI bus (shared by both radios, 16 MHz)
+    // Initialize the custom SPI bus (shared by both radios, 4 MHz)
     SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CSN_PIN);
-    SPI.setFrequency(16000000);
+    SPI.setFrequency(4000000);
     SPI.setBitOrder(MSBFIRST);
     SPI.setDataMode(SPI_MODE0);
 
@@ -335,10 +335,9 @@ void RadioManager::stopJammer() {
     // every payload, so the task exits in microseconds.
     if (jammerTaskHandle != NULL) {
         unsigned long startWait = millis();
-        while (eTaskGetState(jammerTaskHandle) != eDeleted && (millis() - startWait < 500)) {
+        while (jammerTaskHandle != NULL && (millis() - startWait < 500)) {
             delay(2);
         }
-        jammerTaskHandle = NULL;
     }
 
     // Now stop both radios cleanly and drop any residual FIFO payloads
@@ -349,6 +348,15 @@ void RadioManager::stopJammer() {
     }
     appState.jamming = false;
     Serial.println("Jammer Stopped.");
+}
+
+bool RadioManager::stopAllAndWait(uint32_t timeoutMs) {
+    stopAll();
+    const uint32_t started = millis();
+    while ((jammerTaskHandle != nullptr || scanActive) && millis() - started < timeoutMs) {
+        delay(2);
+    }
+    return jammerTaskHandle == nullptr && !scanActive;
 }
 
 void RadioManager::stopAll() {
@@ -598,6 +606,9 @@ void RadioManager::jammerTaskCode(void *param) {
         }
         vTaskDelay(1); // Yield 1 tick so Core 0 IDLE0 can reset the Task Watchdog
     }
+    // Publish completion before deleting the task. Waiting code must not call
+    // eTaskGetState() on a handle whose task has already been freed.
+    self->jammerTaskHandle = nullptr;
     vTaskDelete(NULL);
 }
 

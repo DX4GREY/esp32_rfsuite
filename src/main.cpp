@@ -6,7 +6,7 @@
  *  - Config.h             : Hardware pinout, timing, frequency presets, & constants
  *  - AppState.h/.cpp      : Global state, 6 jammer target presets, & analyzer data
  *  - ButtonManager.h/.cpp : 50ms debouncing & navigation button edge detection
- *  - Watchdog.h/.cpp      : ESP32-S3 hardware watchdog timer (3s auto-recovery)
+ *  - Watchdog.h/.cpp      : Main-loop deadline monitor (3s auto-recovery)
  *  - RadioManager.h/.cpp  : Dual-Core FreeRTOS Task (Core 0 RF Jamming) & Spectrum Scanning
  *  - DisplayManager.h/.cpp: Visual menu, real-time spectrum graph, & channel inspector
  *  - SerialCommander.h/.cpp: Interactive CLI monitor & ASCII graph visualization
@@ -28,6 +28,7 @@
 #include "services/SessionRecorder.h"
 #include "services/PerformanceMonitor.h"
 #include "services/RfEnvironmentAnalyzer.h"
+#include "services/RfAuthorizedProbe.h"
 #include "services/LuaEngine.h"
 #include "services/SubGhzRawService.h"
 
@@ -45,6 +46,18 @@ static void configureShutdownWakeSource() {
     Serial.flush();
     esp_deep_sleep_start();
     while (true) delay(1000); // Defensive fallback; deep sleep does not return.
+}
+
+static bool quiesceForShutdown() {
+    // Core 0 must have no application tasks using SPI/radios when ESP-IDF
+    // stalls it as part of the deep-sleep transition.
+    const bool probeStopped = rfAuthorizedProbe.stopAndWait();
+    const bool environmentStopped = rfEnvironmentAnalyzer.stopAndWait();
+    subGhzRawService.prepareForShutdown();
+    const bool radiosStopped = radioManager.stopAllAndWait();
+    sessionRecorder.stop();
+    watchdog.stop();
+    return probeStopped && environmentStopped && radiosStopped;
 }
 
 static void validateShutdownWakePress() {
@@ -124,7 +137,8 @@ void setup() {
     subGhzRawService.setTriggerThreshold(appState.subGhzTriggerThreshold);
     subGhzRawService.setReplayRepeatCount(appState.subGhzReplayRepeats);
 
-    // 5. Initialize Hardware Watchdog (3.0s Timeout)
+    // 5. Initialize the main-loop deadline monitor (3.0s timeout). Avoid a
+    // second Timer Group ISR alongside ESP-IDF's interrupt/task watchdogs.
     watchdog.init(WATCHDOG_TIMEOUT_US);
 }
 
@@ -215,6 +229,14 @@ void loop() {
         while (digitalRead(BTN_A) == LOW) delay(10);
         delay(50);
         Serial.println("SYSTEM SHUTDOWN: entering deep sleep...");
+        if (!quiesceForShutdown()) {
+            // A live Core 0 task makes deep sleep unsafe. A clean software
+            // restart is preferable to corrupting IDLE0 and entering a panic
+            // loop; the shutdown request is not persisted across reboot.
+            Serial.println("SYSTEM SHUTDOWN: task stop timed out; restarting safely");
+            Serial.flush();
+            ESP.restart();
+        }
         displayManager.prepareForShutdown();
         enterShutdownSleep();
     }

@@ -14,6 +14,11 @@ bool RfEnvironmentAnalyzer::start(RfEnvMode m){
     if(xTaskCreatePinnedToCore(taskEntry,"RFEnvironment",6144,this,2,&task,0)!=pdPASS){rfEnvironmentState.running=false;rfEnvironmentState.mode=RF_ENV_IDLE;task=nullptr;return false;}return true;
 }
 void RfEnvironmentAnalyzer::stop(){stopRequested=true;}
+bool RfEnvironmentAnalyzer::stopAndWait(uint32_t timeoutMs){
+    stopRequested=true;const uint32_t started=millis();
+    while(task&&millis()-started<timeoutMs)vTaskDelay(pdMS_TO_TICKS(2));
+    return task==nullptr;
+}
 void RfEnvironmentAnalyzer::service(){if(task && !rfEnvironmentState.running) task=nullptr;}
 void RfEnvironmentAnalyzer::taskEntry(void* p){static_cast<RfEnvironmentAnalyzer*>(p)->run();vTaskDelete(nullptr);}
 void RfEnvironmentAnalyzer::run(){

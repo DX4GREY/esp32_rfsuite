@@ -15,6 +15,11 @@ bool RfAuthorizedProbe::start(){
 #endif
 }
 void RfAuthorizedProbe::stop(){stopRequested=true;}
+bool RfAuthorizedProbe::stopAndWait(uint32_t timeoutMs){
+    stopRequested=true;const uint32_t started=millis();
+    while(task&&millis()-started<timeoutMs)vTaskDelay(pdMS_TO_TICKS(2));
+    return task==nullptr;
+}
 void RfAuthorizedProbe::taskEntry(void*p){static_cast<RfAuthorizedProbe*>(p)->run();vTaskDelete(nullptr);}
 void RfAuthorizedProbe::run(){
 #if RF_LAB_TX_ENABLED

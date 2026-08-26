@@ -5,6 +5,7 @@ class RfEnvironmentAnalyzer {
 public:
     bool start(RfEnvMode mode = RF_ENV_OCCUPANCY);
     void stop();
+    bool stopAndWait(uint32_t timeoutMs = 1000);
     void service();
     bool setRange(int minCh, int maxCh);
     bool setWindow(int seconds);
