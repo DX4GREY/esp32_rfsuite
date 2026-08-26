@@ -36,6 +36,18 @@ public:
     size_t listFiles(String* names, size_t capacity);
     bool replay(const String& name, void (*yieldCb)() = nullptr);
     void stopReplay() { abortReplay = true; }
+    uint32_t replayPulseIndex() const { return replayProgressPulse; }
+    uint32_t replayPulseTotal() const { return replayProgressTotal; }
+    uint8_t replayPass() const { return replayProgressPass; }
+    uint8_t replayPassTotal() const { return replayProgressPasses; }
+    float replayFrequencyMHz() const { return replayProgressFrequency; }
+    uint8_t replayPercent() const {
+        if (!replayProgressTotal || !replayProgressPasses) return 0;
+        const uint64_t done = static_cast<uint64_t>(replayProgressPass) * replayProgressTotal +
+                              min(replayProgressPulse, replayProgressTotal);
+        const uint64_t total = static_cast<uint64_t>(replayProgressPasses) * replayProgressTotal;
+        return min<uint64_t>(100, done * 100 / total);
+    }
 
     bool startRfTest();
     void stopRfTest();
@@ -94,6 +106,11 @@ private:
     bool armed = false;
     bool autoTrigger = true;
     bool abortReplay = false;
+    uint32_t replayProgressPulse = 0;
+    uint32_t replayProgressTotal = 0;
+    uint8_t replayProgressPass = 0;
+    uint8_t replayProgressPasses = 1;
+    float replayProgressFrequency = 0.0f;
     bool rfTesting = false;
     uint32_t recordingStartedMs = 0;
     uint32_t lastMetricsMs = 0;

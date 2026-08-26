@@ -515,6 +515,11 @@ bool SubGhzRawService::replay(const String& name, void (*yieldCb)()) {
 #if !RF_LAB_TX_ENABLED
     (void)name; (void)yieldCb; error = "RF LAB BUILD REQUIRED"; return false;
 #else
+    replayProgressPulse = 0;
+    replayProgressTotal = 0;
+    replayProgressPass = 0;
+    replayProgressPasses = replayRepeats;
+    replayProgressFrequency = 0.0f;
     if (!storageManager.usingSd() || !cc1101Manager.isConnected()) {
         error = "RADIO OR SD OFFLINE"; return false;
     }
@@ -576,23 +581,29 @@ bool SubGhzRawService::replay(const String& name, void (*yieldCb)()) {
     }
     file.close();
     const float frequency = frequencyHz / 1000000.0f;
+    replayProgressTotal = pulseTotal;
+    replayProgressFrequency = frequency;
     if (!pulseTotal || !txAllowed(frequency)) { error = "REGION BLOCKED"; return false; }
     cc1101Manager.setPreset(preset);
     if (customPresetLength) cc1101Manager.applyCustomPreset(customPresetBuffer, customPresetLength);
     cc1101Manager.setFrequency(frequency);
     cc1101Manager.enterRawReceive();
+    abortReplay = false;
     const uint32_t ccaStarted = millis();
     while (cc1101Manager.carrierDetected(-75) && millis() - ccaStarted < 500) {
         delay(10); if (yieldCb) yieldCb();
     }
+    if (abortReplay) { cc1101Manager.idle(); error = "REPLAY ABORTED"; return false; }
     if (cc1101Manager.carrierDetected(-75)) { cc1101Manager.idle(); error = "CHANNEL BUSY"; return false; }
     if (!cc1101Manager.enterRawTransmit()) { error = "TX START FAILED"; return false; }
-    abortReplay = false;
     const uint32_t txStarted = millis();
     for (uint8_t pass = 0; pass < replayRepeats && !abortReplay && millis() - txStarted < 10000; ++pass) {
+        replayProgressPass = pass;
+        replayProgressPulse = 0;
         bool level = initialLevel;
         cc1101Manager.setRawData(level);
         for (uint32_t i = 0; i < pulseTotal && !abortReplay && millis() - txStarted < 10000; ++i) {
+            replayProgressPulse = i + 1;
             uint32_t duration = importBuffer[i];
             while (duration > 10000 && !abortReplay) {
                 delayMicroseconds(10000); duration -= 10000;
@@ -604,6 +615,11 @@ bool SubGhzRawService::replay(const String& name, void (*yieldCb)()) {
             if ((i & 0x7F) == 0 && yieldCb) yieldCb();
         }
         if (pass + 1 < replayRepeats) delay(20);
+    }
+    if (!abortReplay) {
+        replayProgressPass = replayRepeats;
+        replayProgressPulse = pulseTotal;
+        if (yieldCb) yieldCb();
     }
     cc1101Manager.idle();
     lastTransmitEndedMs = millis();

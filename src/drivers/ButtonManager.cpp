@@ -39,11 +39,38 @@ int ButtonManager::readButton(int pin) {
     return stableState[idx];
 }
 
+bool ButtonManager::inputSuppressed(int idx, int state) {
+    if (!suppressedUntilRelease[idx]) return false;
+    if (state == HIGH) {
+        // Release only rearms the button; it is deliberately not exposed as a
+        // short-release event to the newly opened screen.
+        suppressedUntilRelease[idx] = false;
+        prevState[idx] = HIGH;
+        holdStartTime[idx] = 0;
+        holdReported[idx] = false;
+        shortStartTime[idx] = 0;
+    }
+    return true;
+}
+
+void ButtonManager::suppressHeldButtons() {
+    const int pins[4] = {BTN_UP, BTN_A, BTN_DOWN, BTN_B};
+    for (int idx = 0; idx < 4; ++idx) {
+        const int state = readButton(pins[idx]);
+        suppressedUntilRelease[idx] = state == LOW;
+        prevState[idx] = state;
+        holdStartTime[idx] = 0;
+        holdReported[idx] = false;
+        shortStartTime[idx] = 0;
+    }
+}
+
 bool ButtonManager::isPressed(int pin) {
     int idx = getPinIndex(pin);
     if (idx < 0) return false;
 
     int state = readButton(pin);
+    if (inputSuppressed(idx, state)) return false;
     bool pressed = (prevState[idx] == HIGH && state == LOW);
     prevState[idx] = state;
     return pressed;
@@ -54,6 +81,7 @@ bool ButtonManager::isLongPressed(int pin, unsigned long holdMs) {
     if (idx < 0) return false;
 
     const int state = readButton(pin);
+    if (inputSuppressed(idx, state)) return false;
     if (state == LOW) {
         if (holdStartTime[idx] == 0) holdStartTime[idx] = millis();
         if (!holdReported[idx] && millis() - holdStartTime[idx] >= holdMs) {
@@ -71,6 +99,7 @@ bool ButtonManager::isShortReleased(int pin, unsigned long longPressMs) {
     const int idx = getPinIndex(pin);
     if (idx < 0) return false;
     const int state = readButton(pin);
+    if (inputSuppressed(idx, state)) return false;
     if (state == LOW) {
         if (shortStartTime[idx] == 0) shortStartTime[idx] = millis();
         return false;

@@ -46,6 +46,7 @@ void DisplayManager::resetDynamicCaches() {
     subAnalyzerLayoutDrawn = false;
     subPacketLayoutDrawn = false;
     for (auto& level : previousSubAnalyzerLevels) level = -32768;
+    previousSubAnalyzerPeakIndex = -1;
     previousSubPacketCount = 0xFFFFFFFF;
     previousSubPulseCount = 0xFFFFFFFF;
     subGraphProcessedPulses = 0;
@@ -55,6 +56,8 @@ void DisplayManager::resetDynamicCaches() {
     previousSubFrequencyKhz = -1;
     previousSubRecordState = -1;
     previousSubTestState = -1;
+    subGhzReplayFrame = 0;
+    lastSubGhzReplayFrameMs = 0;
     jammerLayoutDrawn = false;
     settingsLayoutDrawn = false;
     powerLayoutDrawn = false;

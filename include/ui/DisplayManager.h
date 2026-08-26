@@ -50,6 +50,12 @@ private:
     size_t previousSubGhzFileScrollOffset = 0;
     bool subGhzEmulateNeedsPartialRedraw = false;
     bool subGhzDeleteArmed = false;
+    bool subGhzReplayActive = false;
+    bool subGhzReplayFinished = false;
+    bool subGhzReplaySucceeded = false;
+    String subGhzReplayFile;
+    uint8_t subGhzReplayFrame = 0;
+    unsigned long lastSubGhzReplayFrameMs = 0;
     int settingsSelection = 0;
     int statusPage = 0;
     int powerSelection = 0;
@@ -141,6 +147,7 @@ private:
     bool subAnalyzerLayoutDrawn = false;
     bool subPacketLayoutDrawn = false;
     int16_t previousSubAnalyzerLevels[20] = {};
+    int8_t previousSubAnalyzerPeakIndex = -1;
     uint32_t previousSubPacketCount = 0xFFFFFFFF;
     uint32_t previousSubPulseCount = 0xFFFFFFFF;
     uint32_t subGraphProcessedPulses = 0;
@@ -198,6 +205,8 @@ private:
     void redrawSubGhzFileItems();
     void renderSubGhzRecordScreen();
     void renderSubGhzEmulateScreen();
+    void renderSubGhzReplayAnimation();
+    void renderSubGhzReplayResult();
     void renderSubGhzAnalyzerScreen();
     void renderSubGhzPresetsScreen();
     void renderSubGhzPacketScreen();

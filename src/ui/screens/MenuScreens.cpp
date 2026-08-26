@@ -134,27 +134,56 @@ void DisplayManager::redrawSubGhzMenuItems() {
 
 void DisplayManager::renderSubGhzAnalyzerScreen() {
     if (!subAnalyzerLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM ANALYZER" : "FREQUENCY ANALYZER", SPECTRUM_ACCENT);
-        tft.fillRoundRect(4, 18, 152, 72, 4, SPECTRUM_CARD_BG);
-        tft.drawRoundRect(4, 18, 152, 72, 4, SPECTRUM_BORDER);
-        tft.drawFastHLine(7, 74, 146, SPECTRUM_GRID);
-        tft.setCursor(7, 94); tft.setTextColor(ST77XX_GRAY, ST77XX_BLACK); tft.print("PEAK");
-        drawModernFooter("", "A LOCK", "B BACK");
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM RF ANALYZER" : "SUB-GHz ANALYZER", SPECTRUM_ACCENT);
+        tft.fillRoundRect(4, 17, 152, 68, 4, SPECTRUM_CARD_BG);
+        tft.drawRoundRect(4, 17, 152, 68, 4, SPECTRUM_BORDER);
+        // Two subtle reference lines make relative RSSI changes easier to read.
+        for (int x = 8; x <= 151; x += 4) {
+            tft.drawPixel(x, 38, SPECTRUM_GRID);
+            tft.drawPixel(x, 54, SPECTRUM_GRID);
+        }
+        tft.drawFastHLine(8, 70, 144, SPECTRUM_BORDER);
+        tft.setCursor(8, 75); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.printf("%.0f", subGhzRawService.analyzerFrequency(0));
+        tft.setCursor(127, 75);
+        tft.printf("%.0fM", subGhzRawService.analyzerFrequency(subGhzRawService.analyzerCount() - 1));
+
+        tft.fillRoundRect(4, 88, 152, 15, 4, SPECTRUM_HEADER_BG);
+        tft.setCursor(9, 92); tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+        tft.print("PEAK");
+        drawModernFooter("", "A TUNE", "B BACK");
         subAnalyzerLayoutDrawn = true;
+    }
+
+    int8_t peakIndex = 0;
+    float peakDistance = 10000.0f;
+    for (uint8_t i = 0; i < subGhzRawService.analyzerCount(); ++i) {
+        const float distance = fabsf(subGhzRawService.analyzerFrequency(i) -
+                                     subGhzRawService.analyzerPeakFrequency());
+        if (distance < peakDistance) { peakDistance = distance; peakIndex = i; }
     }
     for (uint8_t i = 0; i < subGhzRawService.analyzerCount(); ++i) {
         const int16_t rssi = subGhzRawService.analyzerRssi(i);
-        if (previousSubAnalyzerLevels[i] == rssi) continue;
-        const int x = 8 + i * 7;
-        const int height = constrain(map(rssi, -110, -30, 0, 52), 0, 52);
-        tft.fillRect(x, 21, 5, 53, SPECTRUM_CARD_BG);
-        if (height) tft.fillRect(x, 74 - height, 5, height,
+        if (previousSubAnalyzerLevels[i] == rssi && i != peakIndex &&
+            i != previousSubAnalyzerPeakIndex) continue;
+        const int x = 10 + i * 7;
+        const int height = constrain(map(rssi, -110, -30, 0, 48), 0, 48);
+        tft.fillRect(x, 21, 5, 49, SPECTRUM_CARD_BG);
+        // Restore the dotted guides behind a bar that becomes shorter.
+        if ((x - 8) % 4 == 0) {
+            tft.drawPixel(x, 38, SPECTRUM_GRID);
+            tft.drawPixel(x, 54, SPECTRUM_GRID);
+        }
+        if (height) tft.fillRoundRect(x, 70 - height, 5, height, 1,
             getSignalColor(constrain(map(rssi, -110, -30, 0, 100), 0, 100)));
+        if (i == peakIndex && height > 0)
+            tft.drawFastHLine(x, max(21, 69 - height), 5, ST77XX_WHITE);
         previousSubAnalyzerLevels[i] = rssi;
     }
-    tft.fillRect(36, 92, 118, 12, ST77XX_BLACK);
-    tft.setCursor(38, 94); tft.setTextColor(SPECTRUM_ACCENT, ST77XX_BLACK);
-    tft.printf("%.2fMHz %ddBm", subGhzRawService.analyzerPeakFrequency(),
+    previousSubAnalyzerPeakIndex = peakIndex;
+    tft.fillRect(38, 90, 114, 11, SPECTRUM_HEADER_BG);
+    tft.setCursor(42, 92); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+    tft.printf("%.2f MHz  %d dBm", subGhzRawService.analyzerPeakFrequency(),
                subGhzRawService.analyzerPeakRssi());
 }
 
@@ -225,51 +254,54 @@ void DisplayManager::renderSubGhzPacketScreen() {
 
 void DisplayManager::renderSubGhzRecordScreen() {
     if (!subRecordLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM RECORD" : "SUB-GHz RECORD", SPECTRUM_CRITICAL);
-        tft.fillRoundRect(5, 17, 150, 22, 4, SPECTRUM_CARD_BG);
-        tft.drawRoundRect(5, 17, 150, 22, 4, SPECTRUM_BORDER);
-        tft.setCursor(9, 24); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("FREQ");
-        tft.fillRoundRect(5, 42, 150, 49, 4, SPECTRUM_CARD_BG);
-        tft.drawRoundRect(5, 42, 150, 49, 4, SPECTRUM_BORDER);
-        tft.drawFastHLine(8, 65, 144, SPECTRUM_GRID);
-        tft.setCursor(8, 95); tft.setTextColor(ST77XX_GRAY, ST77XX_BLACK); tft.print("P/R/B");
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM RAW CAPTURE" : "SUB-GHz CAPTURE", SPECTRUM_CRITICAL);
+        tft.fillRoundRect(5, 17, 150, 21, 4, SPECTRUM_CARD_BG);
+        tft.drawRoundRect(5, 17, 150, 21, 4, SPECTRUM_BORDER);
+        tft.setCursor(10, 24); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("MHz");
+        tft.fillRoundRect(5, 41, 150, 39, 4, SPECTRUM_CARD_BG);
+        tft.drawRoundRect(5, 41, 150, 39, 4, SPECTRUM_BORDER);
+        tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
+        tft.fillRoundRect(5, 83, 150, 20, 4, SPECTRUM_HEADER_BG);
+        tft.setCursor(9, 87); tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG); tft.print("PULSE");
         subRecordLayoutDrawn = true;
     }
     const int frequencyKhz = static_cast<int>(cc1101Manager.frequencyMHz() * 1000.0f);
     if (needRedraw || previousSubFrequencyKhz != frequencyKhz) {
-        tft.fillRect(36, 21, 66, 14, SPECTRUM_CARD_BG);
-        tft.setCursor(38, 24); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+        tft.fillRect(36, 20, 66, 15, SPECTRUM_CARD_BG);
+        tft.setCursor(39, 24); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
         tft.printf("%.2f", cc1101Manager.frequencyMHz());
         previousSubFrequencyKhz = frequencyKhz;
     }
     const int recordingState = subGhzRawService.isArmed() ? 2 :
                                (subGhzRawService.isRecording() ? 1 : 0);
     if (needRedraw || previousSubRecordState != recordingState) {
-        tft.fillRect(101, 21, 50, 14, SPECTRUM_CARD_BG);
-        tft.setCursor(105, 24);
-        tft.setTextColor(recordingState ? SPECTRUM_CRITICAL : SPECTRUM_LOW, SPECTRUM_CARD_BG);
-        tft.print(recordingState == 2 ? "ARM" : (recordingState == 1 ? "REC" : "READY"));
+        tft.fillRect(101, 20, 50, 15, SPECTRUM_CARD_BG);
+        tft.fillRoundRect(105, 22, 44, 12, 3,
+                          recordingState ? DISPLAY_ACTIVE_BG : SPECTRUM_BORDER);
+        tft.setCursor(recordingState == 0 ? 112 : 116, 24);
+        tft.setTextColor(recordingState ? SPECTRUM_CRITICAL : SPECTRUM_LOW,
+                         recordingState ? DISPLAY_ACTIVE_BG : SPECTRUM_BORDER);
+        tft.print(recordingState == 2 ? "ARMED" : (recordingState == 1 ? "REC" : "READY"));
         drawModernFooter("U/D FREQ", subGhzRawService.isRecording() ? "A STOP" : "A START", "B BACK");
         if (recordingState == 1) {
-            tft.fillRect(8, 45, 144, 42, SPECTRUM_CARD_BG);
-            tft.drawFastHLine(8, 65, 144, SPECTRUM_GRID);
+            tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
+            tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
             subGraphProcessedPulses = 0; subGraphX = 8; subGraphInitialized = false;
         }
         previousSubRecordState = recordingState;
     }
     const uint32_t pulses = subGhzRawService.pulseCount();
     if (needRedraw || previousSubPulseCount != pulses || subGhzRawService.isRecording()) {
-        tft.fillRect(38, 93, 116, 11, ST77XX_BLACK);
-        tft.setCursor(40, 95); tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+        tft.fillRect(43, 85, 109, 16, SPECTRUM_HEADER_BG);
+        tft.setCursor(45, 87); tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
         if (!subGhzRawService.isRecording() && subGhzRawService.decodedBitCount())
-            tft.printf("%s %ub TE%u", subGhzRawService.detectedProtocol(),
-                       subGhzRawService.decodedBitCount(), subGhzRawService.estimatedTeUs());
-        else if (subGhzRawService.isRecording() && ((millis() / 1000) & 1U))
-            tft.printf("PK%d NF%d %u/s", subGhzRawService.peakRssiDbm(),
-                       subGhzRawService.noiseFloorDbm(), subGhzRawService.pulsesPerSecond());
-        else
-            tft.printf("%lu/%d/%u%%", static_cast<unsigned long>(pulses),
-                       subGhzRawService.liveRssiDbm(), subGhzRawService.bufferPercent());
+            tft.printf("%s %ub", subGhzRawService.detectedProtocol(),
+                       subGhzRawService.decodedBitCount());
+        else tft.printf("%lu  %d dBm", static_cast<unsigned long>(pulses),
+                        subGhzRawService.liveRssiDbm());
+        tft.setCursor(45, 95); tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+        tft.printf("%u/s  BUF %u%%", subGhzRawService.pulsesPerSecond(),
+                   subGhzRawService.bufferPercent());
         previousSubPulseCount = pulses;
     }
 
@@ -281,8 +313,8 @@ void DisplayManager::renderSubGhzRecordScreen() {
     if (pulses - subGraphProcessedPulses > 256) {
         subGraphProcessedPulses = pulses - 256;
         subGraphX = 8; subGraphInitialized = false;
-        tft.fillRect(8, 45, 144, 42, SPECTRUM_CARD_BG);
-        tft.drawFastHLine(8, 65, 144, SPECTRUM_GRID);
+        tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
+        tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
     }
     uint32_t pulseDurations[256];
     uint8_t levelAtStart = 0;
@@ -295,12 +327,12 @@ void DisplayManager::renderSubGhzRecordScreen() {
     for (size_t i = 0; i < newCount; ++i) {
         const int width = constrain(static_cast<int>((pulseDurations[i] + 99) / 100), 1, 24);
         if (subGraphX + width > 152) {
-            tft.fillRect(8, 45, 144, 42, SPECTRUM_CARD_BG);
-            tft.drawFastHLine(8, 65, 144, SPECTRUM_GRID);
+            tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
+            tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
             subGraphX = 8;
         }
-        const int y0 = subGraphLevel ? 49 : 83;
-        const int y1 = subGraphLevel ? 83 : 49;
+        const int y0 = subGraphLevel ? 46 : 75;
+        const int y1 = subGraphLevel ? 75 : 46;
         tft.drawFastHLine(subGraphX, y0, width, SPECTRUM_ACCENT);
         tft.drawFastVLine(subGraphX + width - 1, min(y0, y1), abs(y1 - y0) + 1,
                           SPECTRUM_ACCENT);
@@ -329,6 +361,134 @@ void DisplayManager::renderSubGhzEmulateScreen() {
                      "A LOCK",
 #endif
                      "B BACK");
+}
+
+void DisplayManager::renderSubGhzReplayAnimation() {
+    const unsigned long now = millis();
+    const bool firstFrame = lastSubGhzReplayFrameMs == 0;
+    if (!firstFrame && now - lastSubGhzReplayFrameMs < 70) return;
+    lastSubGhzReplayFrameMs = now;
+
+    if (firstFrame) {
+        drawModernHeader("SUB-GHz REPLAY", SPECTRUM_CRITICAL);
+        tft.fillRoundRect(4, 17, 152, 86, 5, SPECTRUM_CARD_BG);
+        tft.drawRoundRect(4, 17, 152, 86, 5, SPECTRUM_BORDER);
+
+        String shown = subGhzReplayFile;
+        if (shown.length() > 20) shown = shown.substring(0, 17) + "...";
+        tft.setCursor(centeredTextX(shown), 21);
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(shown);
+        drawModernFooter("", "SENDING", "B ABORT");
+    }
+
+    // Flipper-inspired replay page: compact transmitter, animated waves, and
+    // real progress rather than an indeterminate activity screen.
+    tft.fillRect(9, 32, 142, 53, SPECTRUM_CARD_BG);
+    const int phase = subGhzReplayFrame % 4;
+    const uint16_t waveColors[4] = {
+        SPECTRUM_CRITICAL, SPECTRUM_HIGH, SPECTRUM_MID, SPECTRUM_BORDER
+    };
+
+    // Pocket transmitter body and antenna.
+    tft.fillRoundRect(14, 39, 31, 27, 5, SPECTRUM_HEADER_BG);
+    tft.drawRoundRect(14, 39, 31, 27, 5, SPECTRUM_CRITICAL);
+    tft.drawFastVLine(37, 33, 7, SPECTRUM_CRITICAL);
+    tft.drawLine(37, 33, 41, 30, SPECTRUM_CRITICAL);
+    tft.fillCircle(23, 48, 3, waveColors[phase]);
+    tft.drawRoundRect(20, 56, 18, 5, 2, SPECTRUM_BORDER);
+    tft.fillRect(22, 58, 4 + phase * 3, 1, SPECTRUM_LOW);
+
+    // Expanding chevrons read clearly as motion on the tiny 160x128 panel.
+    for (int wave = 0; wave < 3; ++wave) {
+        const int animated = (wave + phase) % 4;
+        const int x = 54 + wave * 14;
+        const int spread = 5 + wave * 3;
+        const uint16_t color = waveColors[animated];
+        tft.drawLine(x, 52 - spread, x + 7, 52, color);
+        tft.drawLine(x + 7, 52, x, 52 + spread, color);
+        if (animated == 0) {
+            tft.drawLine(x + 2, 52 - spread + 2, x + 8, 52, ST77XX_WHITE);
+            tft.drawLine(x + 8, 52, x + 2, 52 + spread - 2, ST77XX_WHITE);
+        }
+    }
+
+    const uint8_t percent = subGhzRawService.replayPercent();
+    const uint8_t pass = min<uint8_t>(subGhzRawService.replayPass() + 1,
+                                      subGhzRawService.replayPassTotal());
+    tft.setCursor(103, 36);
+    tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+    if (subGhzRawService.replayFrequencyMHz() > 0.0f)
+        tft.printf("%.2f", subGhzRawService.replayFrequencyMHz());
+    else tft.print("LOAD...");
+    tft.setCursor(103, 47);
+    tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+    tft.printf("PASS %u/%u", pass, subGhzRawService.replayPassTotal());
+    tft.setCursor(103, 58);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.printf("%lu/%lu", static_cast<unsigned long>(subGhzRawService.replayPulseIndex()),
+               static_cast<unsigned long>(subGhzRawService.replayPulseTotal()));
+
+    tft.setCursor(10, 72);
+    tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
+    tft.printf("TX %3u%%", percent);
+    tft.fillRoundRect(56, 73, 88, 7, 3, SPECTRUM_BORDER);
+    if (percent) tft.fillRoundRect(57, 74, max(2, percent * 86 / 100), 5, 2,
+                                   SPECTRUM_CRITICAL);
+
+    tft.fillRect(9, 87, 142, 12, SPECTRUM_CARD_BG);
+    tft.setCursor(28, 89);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("Sending raw signal...");
+
+    const char spinner[] = {'|', '/', '-', '\\'};
+    tft.fillRect(134, 22, 10, 9, SPECTRUM_CARD_BG);
+    tft.setCursor(136, 23);
+    tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
+    tft.print(spinner[phase]);
+    ++subGhzReplayFrame;
+}
+
+void DisplayManager::renderSubGhzReplayResult() {
+    const uint16_t accent = subGhzReplaySucceeded ? SPECTRUM_LOW : SPECTRUM_CRITICAL;
+    drawModernHeader(subGhzReplaySucceeded ? "REPLAY COMPLETE" : "REPLAY STOPPED", accent);
+    tft.fillRoundRect(5, 18, 150, 84, 5, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(5, 18, 150, 84, 5, accent);
+
+    // Large success/failure emblem keeps the outcome readable at a glance.
+    tft.drawCircle(80, 43, 15, accent);
+    tft.drawCircle(80, 43, 16, SPECTRUM_BORDER);
+    if (subGhzReplaySucceeded) {
+        tft.drawLine(72, 43, 78, 49, accent);
+        tft.drawLine(78, 49, 89, 36, accent);
+        tft.drawLine(72, 44, 78, 50, ST77XX_WHITE);
+    } else {
+        tft.drawLine(73, 36, 87, 50, accent);
+        tft.drawLine(87, 36, 73, 50, accent);
+    }
+
+    String shown = subGhzReplayFile;
+    if (shown.length() > 20) shown = shown.substring(0, 17) + "...";
+    tft.setCursor(centeredTextX(shown), 64);
+    tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+    tft.print(shown);
+
+    tft.setCursor(16, 77);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    if (subGhzReplaySucceeded) {
+        tft.printf("%.2f MHz  %lu pulses", subGhzRawService.replayFrequencyMHz(),
+                   static_cast<unsigned long>(subGhzRawService.replayPulseTotal()));
+    } else {
+        String status = subGhzRawService.lastError();
+        if (status.length() > 21) status.remove(21);
+        tft.setCursor(centeredTextX(status), 77);
+        tft.print(status);
+    }
+    tft.setCursor(27, 90);
+    tft.setTextColor(accent, SPECTRUM_CARD_BG);
+    tft.print(subGhzReplaySucceeded ? "Signal sent successfully" : "Signal was not sent");
+
+    drawModernFooter("", "A REPLAY", "B BACK");
 }
 
 void DisplayManager::drawSubGhzFileItem(size_t index, bool selected) {

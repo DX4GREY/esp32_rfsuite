@@ -88,7 +88,11 @@ void DisplayManager::updateUI() {
             }
             break;
         case APP_MODE_SUBGHZ_EMULATE:
-            if (subGhzEmulateNeedsPartialRedraw) {
+            if (subGhzReplayActive) {
+                renderSubGhzReplayAnimation(); needRedraw = false;
+            } else if (subGhzReplayFinished) {
+                if (needRedraw) { renderSubGhzReplayResult(); needRedraw = false; }
+            } else if (subGhzEmulateNeedsPartialRedraw) {
                 redrawSubGhzFileItems(); subGhzEmulateNeedsPartialRedraw = false;
             } else if (needRedraw) { renderSubGhzEmulateScreen(); needRedraw = false; }
             break;
@@ -224,6 +228,16 @@ void DisplayManager::updateUI() {
 // INPUT NAVIGATION
 // =============================================================================
 void DisplayManager::processInput() {
+    // Every app-mode transition is an input boundary. If it was triggered on
+    // button-down, consume the matching release so it cannot fire a second
+    // action in the destination screen. The destructor runs on every return.
+    struct ModeTransitionGuard {
+        AppMode entryMode;
+        ~ModeTransitionGuard() {
+            if (appState.appMode != entryMode) buttonManager.suppressHeldButtons();
+        }
+    } modeTransitionGuard{appState.appMode};
+
     if (appState.appMode == APP_MODE_BAND_SELECT) {
         if (buttonManager.isPressed(BTN_UP)) {
             previousBandSelection = bandSelection;
@@ -369,6 +383,39 @@ void DisplayManager::processInput() {
         return;
     }
     if (appState.appMode == APP_MODE_SUBGHZ_EMULATE) {
+        auto runSelectedReplay = [&]() {
+            subGhzReplayActive = true;
+            subGhzReplayFinished = false;
+            subGhzReplayFile = subGhzFiles[subGhzFileSelection];
+            subGhzReplayFrame = 0;
+            lastSubGhzReplayFrameMs = 0;
+            needRedraw = true;
+            updateUI();
+            subGhzReplaySucceeded = subGhzRawService.replay(subGhzReplayFile, yieldToUI);
+            subGhzReplayActive = false;
+            subGhzReplayFinished = true;
+            // Replay is a blocking state transition inside the same app mode,
+            // so guard it explicitly as well.
+            buttonManager.suppressHeldButtons();
+            needRedraw = true;
+        };
+
+        // replay() yields back into this input handler while transmitting.
+        // Keep that nested pass limited to cancellation so A cannot recursively
+        // start the same file again.
+        if (subGhzReplayActive) {
+            if (buttonManager.isPressed(BTN_B)) subGhzRawService.stopReplay();
+            return;
+        }
+        if (subGhzReplayFinished) {
+            if (buttonManager.isShortReleased(BTN_A)) {
+                runSelectedReplay();
+            } else if (buttonManager.isShortReleased(BTN_B)) {
+                subGhzReplayFinished = false;
+                needRedraw = true;
+            }
+            return;
+        }
         if (subGhzFileCount && buttonManager.readButton(BTN_UP) == LOW &&
             buttonManager.isPressed(BTN_A)) {
             String renamed;
@@ -405,7 +452,7 @@ void DisplayManager::processInput() {
                 subGhzFileCount = subGhzRawService.listFiles(subGhzFiles, SUBGHZ_UI_MAX_FILES);
                 if (subGhzFileSelection >= subGhzFileCount && subGhzFileSelection) --subGhzFileSelection;
                 subGhzDeleteArmed = false;
-            } else subGhzRawService.replay(subGhzFiles[subGhzFileSelection], yieldToUI);
+            } else runSelectedReplay();
             needRedraw = true;
         } else if (buttonManager.isShortReleased(BTN_B)) {
             if (subGhzDeleteArmed) { subGhzDeleteArmed = false; needRedraw = true; return; }
