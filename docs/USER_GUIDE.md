@@ -259,6 +259,12 @@ selection marker, header symbol, footer geometry, and motion language:
 Theme animation is paused during timing-sensitive Sub-GHz record, replay, and
 RF Test operations.
 
+Moving between items uses a four-frame focus transition. The destination card
+changes from its idle border into the theme-specific marker over roughly 48 ms;
+List scrolling rebuilds the viewport once and animates only the newly focused
+row. Delays yield to FreeRTOS and the transition is never used inside RF timing
+loops.
+
 ### Status
 
 Use `UP/DOWN` to change page, `A` to refresh, and `B` to return.

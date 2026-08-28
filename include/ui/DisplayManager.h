@@ -102,6 +102,7 @@ private:
 
     // Partial-redraw support for main menu navigation
     bool menuNeedsPartialRedraw = false;
+    uint8_t menuTransitionPhase = 3;
     int prevMenuSelection = 0;
     int prevMenuScrollOffset = 0;
 

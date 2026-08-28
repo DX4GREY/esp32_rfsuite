@@ -88,6 +88,8 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
   switch their assigned Grid/List layout, header/footer geometry, and animation.
 - MATRIX uses List while VIOLET and RETRO use Grid; every theme has a distinct
   menu-card silhouette or focus marker rather than a palette-only variation.
+- Grid and List item navigation completes its four-frame focus transition
+  without stale markers, clipping, double input, or watchdog resets.
 - Dynamic graphs do not clear the full screen.
 - Short and long presses do not double-trigger on Spectrum and Events.
 - Status values fit their rows.

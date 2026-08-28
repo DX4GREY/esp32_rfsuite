@@ -36,20 +36,25 @@ void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
         default: break;
     }
 
+    const uint8_t motion = selected ? min<uint8_t>(3, menuTransitionPhase) : 3;
+    const uint16_t animatedBorder = selected && motion < 2 ? SPECTRUM_GRID : border;
     tft.fillRoundRect(x, y, width, height, radius, background);
-    tft.drawRoundRect(x, y, width, height, radius, border);
+    tft.drawRoundRect(x, y, width, height, radius, animatedBorder);
 
     switch (appState.displayTheme) {
         case DISPLAY_THEME_FLIPPER:
             if (selected) {
-                tft.fillRect(x + 3, y + 3, list ? 5 : width - 6, list ? height - 6 : 3,
+                const int marker = list ? max(1, (5 * (motion + 1)) / 4) :
+                                          max(4, ((width - 6) * (motion + 1)) / 4);
+                tft.fillRect(x + 3, y + 3, marker, list ? height - 6 : 3,
                              SPECTRUM_ACCENT);
-                if (!list) tft.drawFastHLine(x + 7, y + height - 3, width - 14,
+                if (!list && motion >= 2) tft.drawFastHLine(x + 7, y + height - 3,
+                                             ((width - 14) * motion) / 3,
                                              SPECTRUM_ACCENT);
             }
             break;
         case DISPLAY_THEME_NEON:
-            if (selected && width > 8 && height > 8)
+            if (selected && motion >= 2 && width > 8 && height > 8)
                 tft.drawRoundRect(x + 2, y + 2, width - 4, height - 4,
                                   max(1, radius - 2), SPECTRUM_GRID);
             break;
@@ -60,14 +65,17 @@ void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
             break;
         case DISPLAY_THEME_TERMINAL:
             if (selected) {
-                tft.drawFastVLine(x + 2, y + 2, height - 4, SPECTRUM_ACCENT);
-                tft.drawPixel(x + 4, y + height / 2, SPECTRUM_ACCENT);
+                const int markerHeight = max(2, ((height - 4) * (motion + 1)) / 4);
+                tft.drawFastVLine(x + 2, y + 2, markerHeight, SPECTRUM_ACCENT);
+                if (motion >= 2) tft.drawPixel(x + 4, y + height / 2, SPECTRUM_ACCENT);
             }
             break;
         case DISPLAY_THEME_MATRIX:
             if (selected) {
-                tft.drawFastHLine(x, y, 8, SPECTRUM_ACCENT);
-                tft.drawFastHLine(x + width - 8, y + height - 1, 8, SPECTRUM_ACCENT);
+                const int bracket = 2 + motion * 2;
+                tft.drawFastHLine(x, y, bracket, SPECTRUM_ACCENT);
+                tft.drawFastHLine(x + width - bracket, y + height - 1, bracket,
+                                  SPECTRUM_ACCENT);
             }
             break;
         case DISPLAY_THEME_AMBER:
@@ -75,15 +83,17 @@ void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
             tft.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
             break;
         case DISPLAY_THEME_VIOLET:
-            if (selected) tft.drawFastHLine(x + 7, y + height - 2, width - 14,
+            if (selected) tft.drawFastHLine(x + 7, y + height - 2,
+                                            max(2, ((width - 14) * (motion + 1)) / 4),
                                             SPECTRUM_ACCENT);
             break;
         case DISPLAY_THEME_OCEAN:
-            if (selected) tft.fillCircle(x + width - 9, y + height / 2, 2,
+            if (selected) tft.fillCircle(x + width - 9, y + height / 2,
+                                         motion >= 2 ? 2 : 1,
                                          SPECTRUM_ACCENT);
             break;
         case DISPLAY_THEME_ICE:
-            if (selected) {
+            if (selected && motion >= 1) {
                 tft.drawLine(x + width - 10, y + 2, x + width - 3, y + height / 2,
                              SPECTRUM_ACCENT);
                 tft.drawLine(x + width - 3, y + height / 2, x + width - 10,
@@ -91,8 +101,10 @@ void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
             }
             break;
         default:
-            if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5), 3,
-                                            list ? height - 6 : height - 10, 1,
+            if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5),
+                                            max(1, static_cast<int>(motion)),
+                                            max(2, ((list ? height - 6 : height - 10) *
+                                                    (motion + 1)) / 4), 1,
                                             SPECTRUM_ACCENT);
             break;
     }
@@ -142,10 +154,19 @@ void DisplayManager::redrawMainMenuItems() {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         const int count = page == 0 ? 6 : 1;
         for (int slot = mainMenuScrollOffset; slot < min(count, mainMenuScrollOffset + 4); ++slot)
-            drawMainMenuItem(page * 6 + slot, slot, page * 6 + slot == bandSelection);
+            drawMainMenuItem(page * 6 + slot, slot, false);
+        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+            drawMainMenuItem(bandSelection, bandSelection % 6, true);
+            delay(12); yield();
+        }
+        menuTransitionPhase = 3;
     } else {
         drawMainMenuItem(previousBandSelection, previousBandSelection % 6, false);
-        drawMainMenuItem(bandSelection, bandSelection % 6, true);
+        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+            drawMainMenuItem(bandSelection, bandSelection % 6, true);
+            delay(12); yield();
+        }
+        menuTransitionPhase = 3;
     }
 }
 
@@ -198,10 +219,19 @@ void DisplayManager::redrawSubGhzMenuItems() {
         previousSubGhzMenuScrollOffset != subGhzMenuScrollOffset) {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         for (int i = subGhzMenuScrollOffset; i < min(6, subGhzMenuScrollOffset + 4); ++i)
-            drawSubGhzMenuItem(i, i == subGhzMenuSelection);
+            drawSubGhzMenuItem(i, false);
+        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+            drawSubGhzMenuItem(subGhzMenuSelection, true);
+            delay(12); yield();
+        }
+        menuTransitionPhase = 3;
     } else {
         drawSubGhzMenuItem(previousSubGhzMenuSelection, false);
-        drawSubGhzMenuItem(subGhzMenuSelection, true);
+        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+            drawSubGhzMenuItem(subGhzMenuSelection, true);
+            delay(12); yield();
+        }
+        menuTransitionPhase = 3;
     }
 }
 
@@ -772,10 +802,19 @@ void DisplayManager::redrawMenuItems(int oldSel, int newSel) {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         const int count = MenuCatalog::pageItemCount(menuPage);
         for (int i = menuScrollOffset; i < min(count, menuScrollOffset + 4); ++i)
-            drawMenuItem(i, i == menuSelection);
+            drawMenuItem(i, false);
+        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+            drawMenuItem(menuSelection, true);
+            delay(12); yield();
+        }
+        menuTransitionPhase = 3;
     } else if (oldSel != newSel) {
         drawMenuItem(oldSel, false);
-        drawMenuItem(newSel, true);
+        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+            drawMenuItem(newSel, true);
+            delay(12); yield();
+        }
+        menuTransitionPhase = 3;
     }
 }
 
