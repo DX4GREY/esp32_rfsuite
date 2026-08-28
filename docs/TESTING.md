@@ -81,8 +81,13 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
 
 ### Display and controls
 
+- The RF Suite boot animation completes without clipping, long-lived SPI
+  transactions, watchdog resets, or copied third-party branding.
 - All 12 menu cards render without clipping.
-- Six themes leave no stale pixels after switching.
+- Ten UI themes leave no stale pixels after switching. Theme changes also
+  switch their assigned Grid/List layout, header/footer geometry, and animation.
+- MATRIX uses List while VIOLET and RETRO use Grid; every theme has a distinct
+  menu-card silhouette or focus marker rather than a palette-only variation.
 - Dynamic graphs do not clear the full screen.
 - Short and long presses do not double-trigger on Spectrum and Events.
 - Status values fit their rows.

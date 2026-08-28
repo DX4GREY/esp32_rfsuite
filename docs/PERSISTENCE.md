@@ -14,14 +14,13 @@ The current schema version is `6`.
 
 | Key | Type | Default | Validation / meaning |
 |---|---|---|---|
-| `schema` | unsigned byte | `6` when first saved | Persistence schema version |
+| `schema` | unsigned byte | `7` when first saved | Persistence schema version |
 | `power` | integer | `RF24_PA_MAX` | Four global TX levels mapped to nRF24 PA and CC1101 PA-table values |
 | `dwell` | integer | `200` | Global nRF24/CC1101 lab hop dwell, clamped to `10–10000` µs |
 | `target` | unsigned byte | Wi-Fi | Must be one of six target enums |
 | `profile` | unsigned byte | BALANCED | FAST, BALANCED, DEEP, or CUSTOM |
 | `custom` | integer | `40` | Clamped to `10–100` samples |
-| `theme` | unsigned byte | CYBER | Must be one of six themes |
-| `menu_view` | unsigned byte | GRID | GRID or LIST across Main, 2.4 GHz, and Sub-GHz menus |
+| `theme` | unsigned byte | CYBER | One of ten UI profiles; selects palette, menu layout, geometry, and animation |
 | `sniff_sd` | boolean | `false` | Save packet-sniffer records to SD when mounted |
 | `sub_pre` | unsigned byte | OOK 650 kHz | CC1101 modulation preset, validated `0–4` |
 | `sub_reg` | unsigned byte | RX ONLY | Sub-GHz TX policy: RX ONLY, ETSI, or FCC |
@@ -56,10 +55,11 @@ Explicit `saveSettings()` is used by factory reset. Shutdown currently does not 
 
 Schema 0/legacy installations load the original keys. Schema 2 adds analyzer
 trace, event, and watch settings; schema 3 adds RF-environment and lab-probe
-settings; schema 4 adds the menu layout; schema 5 adds packet-sniffer SD
-logging. Missing newer fields use defaults and schedule one deferred schema-5
-save. Every loaded enum and numeric value is
-validated before use.
+settings; schema 4 added the legacy standalone menu layout; schema 5 adds
+packet-sniffer SD logging; schema 6 adds Sub-GHz settings; schema 7 folds menu
+layout into the selected theme. The old `menu_view` key is ignored. Missing
+newer fields use defaults and schedule one deferred schema-7 save. Every loaded
+enum and numeric value is validated before use.
 
 Future migrations should:
 

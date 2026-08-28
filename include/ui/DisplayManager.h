@@ -124,6 +124,8 @@ private:
     unsigned long lastStatusRenderMs = 0;
     unsigned long lastEnvRenderMs = 0;
     unsigned long lastSnifferRenderMs = 0;
+    unsigned long lastThemeAnimationMs = 0;
+    uint8_t themeAnimationFrame = 0;
     uint8_t previousEnvHistoryHead = 0xFF;
     uint8_t previousEnvEventHead = 0xFF;
     uint8_t previousEnvEventScroll = 0xFF;
@@ -152,6 +154,7 @@ private:
     uint32_t previousSubPacketCount = 0xFFFFFFFF;
     uint32_t previousSubPulseCount = 0xFFFFFFFF;
     uint32_t subGraphProcessedPulses = 0;
+    uint32_t subGraphPulseBuffer[256] = {};
     int subGraphX = 8;
     bool subGraphLevel = false;
     bool subGraphInitialized = false;
@@ -174,7 +177,6 @@ private:
     int previousDwellTimeUs = -1;
     int previousSettingsSelection = -1;
     int previousSettingsTheme = -1;
-    int previousSettingsMenuLayout = -1;
     int previousSettingsSniffSave = -1;
     int previousPowerSelection = -1;
     int previousSubPreset = -1;
@@ -239,11 +241,15 @@ private:
     void drawSpectrumBars();
     void drawMenuItem(int index, bool selected);
     void drawMenuIcon(int index, int centerX, int centerY, uint16_t color, uint16_t background);
+    void drawThemedMenuCard(int x, int y, int width, int height,
+                            bool selected, bool list,
+                            uint16_t background, uint16_t border);
     void redrawMenuItems(int oldSel, int newSel);
     void resetDynamicCaches();
     void drawModernHeader(const char* title, uint16_t accent);
     void drawModernFooter(const char* left, const char* middle, const char* right);
     void drawFooterChip(int x, int width, const char* label);
+    void drawThemeAnimation();
     void loadFileExplorerDirectory();
     bool openVideo(const String& path);
     void closeVideo();

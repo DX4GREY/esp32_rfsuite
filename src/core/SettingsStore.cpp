@@ -4,7 +4,7 @@
 #include "core/RfEnvironmentMath.h"
 
 namespace {
-constexpr uint8_t SETTINGS_SCHEMA_VERSION = 6;
+constexpr uint8_t SETTINGS_SCHEMA_VERSION = 7;
 constexpr unsigned long SETTINGS_SAVE_DELAY_MS = 1500;
 }
 
@@ -78,10 +78,7 @@ void AppState::loadSettings() {
         { const uint8_t rate=prefs.getUChar("prb_rate",RF24_1MBPS); rfEnvironmentState.config.probeDataRate=(rate==RF24_250KBPS||rate==RF24_1MBPS||rate==RF24_2MBPS)?rate:RF24_1MBPS; }
 #endif
     }
-    if (storedSchema >= 4) {
-        const uint8_t layout = prefs.getUChar("menu_view", MENU_LAYOUT_GRID);
-        menuLayout = layout < MENU_LAYOUT_COUNT ? static_cast<MenuLayout>(layout) : MENU_LAYOUT_GRID;
-    }
+    applyThemeProfile();
     if (storedSchema >= 5) {
         saveSniffPacketsToSd = prefs.getBool("sniff_sd", false);
     }
@@ -110,7 +107,6 @@ void AppState::saveSettings() {
     prefs.putUChar("profile", static_cast<uint8_t>(scanProfile));
     prefs.putInt("custom", customSpectrumSamples);
     prefs.putUChar("theme", static_cast<uint8_t>(displayTheme));
-    prefs.putUChar("menu_view", static_cast<uint8_t>(menuLayout));
     prefs.putBool("sniff_sd", saveSniffPacketsToSd);
     prefs.putUChar("sub_pre", subGhzRadioPreset);
     prefs.putUChar("sub_reg", subGhzRegion);
@@ -163,7 +159,7 @@ void AppState::factoryResetSettings() {
     powerLevel = DEFAULT_POWER;
     dwellTimeUs = JAMMER_DWELL_US;
     displayTheme = DISPLAY_THEME_CYBER;
-    menuLayout = MENU_LAYOUT_GRID;
+    applyThemeProfile();
     saveSniffPacketsToSd = false;
     subGhzRadioPreset = 1;
     subGhzRegion = 0;

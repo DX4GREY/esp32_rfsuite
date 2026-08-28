@@ -19,6 +19,85 @@ constexpr const char* SUB_LABELS[] = {
 constexpr uint8_t SUB_ICONS[] = {0, 5, 12, 8, 7, 6};
 }
 
+void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
+                                        bool selected, bool list,
+                                        uint16_t background, uint16_t border) {
+    int radius = 4;
+    switch (appState.displayTheme) {
+        case DISPLAY_THEME_OCEAN: radius = 8; break;
+        case DISPLAY_THEME_VIOLET: radius = 6; break;
+        case DISPLAY_THEME_ICE: radius = 5; break;
+        case DISPLAY_THEME_FLIPPER: radius = 2; break;
+        case DISPLAY_THEME_NEON: radius = 6; break;
+        case DISPLAY_THEME_AMBER: radius = 1; break;
+        case DISPLAY_THEME_MATRIX:
+        case DISPLAY_THEME_RETRO:
+        case DISPLAY_THEME_TERMINAL: radius = 0; break;
+        default: break;
+    }
+
+    tft.fillRoundRect(x, y, width, height, radius, background);
+    tft.drawRoundRect(x, y, width, height, radius, border);
+
+    switch (appState.displayTheme) {
+        case DISPLAY_THEME_FLIPPER:
+            if (selected) {
+                tft.fillRect(x + 3, y + 3, list ? 5 : width - 6, list ? height - 6 : 3,
+                             SPECTRUM_ACCENT);
+                if (!list) tft.drawFastHLine(x + 7, y + height - 3, width - 14,
+                                             SPECTRUM_ACCENT);
+            }
+            break;
+        case DISPLAY_THEME_NEON:
+            if (selected && width > 8 && height > 8)
+                tft.drawRoundRect(x + 2, y + 2, width - 4, height - 4,
+                                  max(1, radius - 2), SPECTRUM_GRID);
+            break;
+        case DISPLAY_THEME_RETRO:
+            tft.drawFastHLine(x + 2, y + 2, width - 4,
+                              selected ? SPECTRUM_ACCENT : SPECTRUM_GRID);
+            tft.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
+            break;
+        case DISPLAY_THEME_TERMINAL:
+            if (selected) {
+                tft.drawFastVLine(x + 2, y + 2, height - 4, SPECTRUM_ACCENT);
+                tft.drawPixel(x + 4, y + height / 2, SPECTRUM_ACCENT);
+            }
+            break;
+        case DISPLAY_THEME_MATRIX:
+            if (selected) {
+                tft.drawFastHLine(x, y, 8, SPECTRUM_ACCENT);
+                tft.drawFastHLine(x + width - 8, y + height - 1, 8, SPECTRUM_ACCENT);
+            }
+            break;
+        case DISPLAY_THEME_AMBER:
+            tft.drawPixel(x + 1, y + 1, SPECTRUM_HIGH);
+            tft.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
+            break;
+        case DISPLAY_THEME_VIOLET:
+            if (selected) tft.drawFastHLine(x + 7, y + height - 2, width - 14,
+                                            SPECTRUM_ACCENT);
+            break;
+        case DISPLAY_THEME_OCEAN:
+            if (selected) tft.fillCircle(x + width - 9, y + height / 2, 2,
+                                         SPECTRUM_ACCENT);
+            break;
+        case DISPLAY_THEME_ICE:
+            if (selected) {
+                tft.drawLine(x + width - 10, y + 2, x + width - 3, y + height / 2,
+                             SPECTRUM_ACCENT);
+                tft.drawLine(x + width - 3, y + height / 2, x + width - 10,
+                             y + height - 3, SPECTRUM_ACCENT);
+            }
+            break;
+        default:
+            if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5), 3,
+                                            list ? height - 6 : height - 10, 1,
+                                            SPECTRUM_ACCENT);
+            break;
+    }
+}
+
 void DisplayManager::drawMainMenuItem(int featureIndex, int slot, bool selected) {
     const bool list = appState.menuLayout == MENU_LAYOUT_LIST;
     const int visibleRow = slot - mainMenuScrollOffset;
@@ -30,10 +109,7 @@ void DisplayManager::drawMainMenuItem(int featureIndex, int slot, bool selected)
     const uint16_t bg = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
     const uint16_t edge = selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER;
     tft.fillRect(x, y, width, height, ST77XX_BLACK);
-    tft.fillRoundRect(x, y, width, height, 4, bg);
-    tft.drawRoundRect(x, y, width, height, 4, edge);
-    if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5), 3, list ? 14 : 17, 1,
-                                    SPECTRUM_ACCENT);
+    drawThemedMenuCard(x, y, width, height, selected, list, bg, edge);
     drawMenuIcon(MAIN_ICONS[featureIndex], list ? x + 20 : x + width / 2,
                  list ? y + 10 : y + 8, selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg);
     const int labelX = list ? x + 39 : x + (width - static_cast<int>(strlen(MAIN_LABELS[featureIndex])) * 6) / 2;
@@ -84,10 +160,7 @@ void DisplayManager::drawSubGhzMenuItem(int index, bool selected) {
     const uint16_t bg = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
     const uint16_t edge = selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER;
     tft.fillRect(x, y, width, height, ST77XX_BLACK);
-    tft.fillRoundRect(x, y, width, height, 4, bg);
-    tft.drawRoundRect(x, y, width, height, 4, edge);
-    if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5), 3, list ? 14 : 17, 1,
-                                    SPECTRUM_ACCENT);
+    drawThemedMenuCard(x, y, width, height, selected, list, bg, edge);
     drawMenuIcon(SUB_ICONS[index], list ? x + 20 : x + width / 2,
                  list ? y + 10 : y + 8, selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg);
     const int labelX = list ? x + 39 : x + (width - static_cast<int>(strlen(SUB_LABELS[index])) * 6) / 2;
@@ -316,16 +389,15 @@ void DisplayManager::renderSubGhzRecordScreen() {
         tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
         tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
     }
-    uint32_t pulseDurations[256];
     uint8_t levelAtStart = 0;
     const size_t newCount = subGhzRawService.copyPulses(
-        subGraphProcessedPulses, pulseDurations, 256, levelAtStart);
+        subGraphProcessedPulses, subGraphPulseBuffer, 256, levelAtStart);
     if (!subGraphInitialized && newCount) {
         subGraphLevel = levelAtStart != 0;
         subGraphInitialized = true;
     }
     for (size_t i = 0; i < newCount; ++i) {
-        const int width = constrain(static_cast<int>((pulseDurations[i] + 99) / 100), 1, 24);
+        const int width = constrain(static_cast<int>((subGraphPulseBuffer[i] + 99) / 100), 1, 24);
         if (subGraphX + width > 152) {
             tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
             tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
@@ -366,7 +438,7 @@ void DisplayManager::renderSubGhzEmulateScreen() {
 void DisplayManager::renderSubGhzReplayAnimation() {
     const unsigned long now = millis();
     const bool firstFrame = lastSubGhzReplayFrameMs == 0;
-    if (!firstFrame && now - lastSubGhzReplayFrameMs < 70) return;
+    if (!firstFrame && now - lastSubGhzReplayFrameMs < 120) return;
     lastSubGhzReplayFrameMs = now;
 
     if (firstFrame) {
@@ -668,10 +740,8 @@ void DisplayManager::drawMenuItem(int index, bool selected) {
     // Clear only this card's dirty rectangle before rebuilding it.
     if (list) tft.fillRect(3, y, 154, cardHeight, ST77XX_BLACK);
     else tft.fillRect(x, y, cardWidth, cardHeight, ST77XX_BLACK);
-    tft.fillRoundRect(x, y, cardWidth, cardHeight, 4, background);
-    tft.drawRoundRect(x, y, cardWidth, cardHeight, 4, border);
-    if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5), 3,
-                                    list ? 14 : 17, 1, SPECTRUM_ACCENT);
+    drawThemedMenuCard(x, y, cardWidth, cardHeight, selected, list,
+                       background, border);
 
     drawMenuIcon(feature.iconId, list ? x + 20 : x + cardWidth / 2,
                  list ? y + 10 : y + 8,

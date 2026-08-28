@@ -47,7 +47,9 @@ The interface is designed for a 160 × 128 landscape display. It uses partial/di
 - Independent connectivity diagnostics for both radios.
 - Six-page System Status with live ESP32, nRF24, CC1101/Sub-GHz, build-profile,
   storage, UI, scan, and SPI timing data.
-- Six selectable display themes: Cyber, Ocean, Amber, Matrix, Violet, and Ice.
+- Ten complete UI themes controlling palette, Grid/List layout, header/footer
+  geometry, and animation: Cyber, Ocean, Amber, Matrix, Violet, Ice,
+  mascot-free Flipper, Retro, Terminal, and Neon.
 - Versioned NVS configuration with validation, delayed writes, migration, and confirmed factory reset.
 - Native analyzer unit tests and GitHub Actions CI for both firmware profiles.
 - Software restart and low-power shutdown using ESP32 deep sleep.
@@ -250,7 +252,7 @@ file format, replay progress controls, and remote compatibility, see the
 | RX Only / RF Test | RX-only notice in the default profile; controlled transmission screen in the lab profile | Lab profile: `UP/DOWN`: target, `A`: start or stop |
 | Radio Diag | Check Radio 1 and Radio 2 connectivity | `A`: refresh |
 | Profiles | Select analyzer sampling depth | `UP/DOWN`: profile, `A`: change CUSTOM value |
-| Settings | Configure RF power, dwell time, display theme, and Grid/List menu layout | `UP/DOWN`: select field, `A`: next value |
+| Settings | Configure RF power, dwell time, complete UI theme, and packet saving | `UP/DOWN`: select field, `A`: next value |
 | Status | Hardware, memory, radio/software, and performance data | `UP/DOWN`: page, `A`: refresh |
 | Power | Restart or enter deep sleep | `UP/DOWN`: option, `A`: confirm |
 

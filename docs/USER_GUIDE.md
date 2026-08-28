@@ -2,7 +2,12 @@
 
 ## Main menu
 
-After the splash screen, the themed Main Menu provides **2.4 GHz**,
+The original RF Suite boot animation presents travelling spectrum bins, a
+rotating RF locator, deterministic interference glitches, a sharp pulse trace,
+radar lock, and a flashing `SIGNAL ACQUIRED` state. It borrows
+the compact staged-boot concept common to ESP32 handheld firmware without
+copying another project's artwork, logo, or motion design. After it completes,
+the themed Main Menu provides **2.4 GHz**,
 **Sub-GHz**, Settings, System Info, Lua Scripts, SD Files, and Power. Use
 `UP`/`DOWN` to select and `A` to open.
 
@@ -231,9 +236,28 @@ Use `UP/DOWN` to select and `A` to advance the value.
 |---|---|---|
 | TX Power | MIN, LOW, HIGH, MAX | Applied to both nRF24 and CC1101 lab transmission; CC1101 uses mapped PA-table steps |
 | TX Dwell | Preset microsecond values | Applied to nRF24 hopping and the CC1101 RF Test sweep |
-| Display Theme | CYBER, OCEAN, AMBER, MATRIX, VIOLET, ICE | Applied across Main Menu, both radio sections, and global screens |
-| Menu Layout | GRID, LIST | Applied to Main Menu, the 2.4 GHz catalog, and the Sub-GHz menu |
+| UI Theme | CYBER, OCEAN, AMBER, MATRIX, VIOLET, ICE, FLIPPER, RETRO, TERMINAL, NEON | Controls colors, menu layout, geometry, and animation |
 | Sniff to SD | OFF, SD CARD | Controls nRF24 packet-sniffer saving when an SD card is mounted |
+
+Menu View is no longer separate. OCEAN, MATRIX, ICE, and TERMINAL use a List
+layout; the other profiles use Grid. Themes also own their card silhouette,
+selection marker, header symbol, footer geometry, and motion language:
+
+| Theme | Layout | Geometry and motion |
+|---|---|---|
+| CYBER | Grid | Rounded instrumentation cards and signal-bar motion |
+| OCEAN | List | Pill-shaped rows, sonar rings, and a moving current dot |
+| AMBER | Grid | Tight instrument corners, calibration pixels, and scan axes |
+| MATRIX | List | Square bracketed rows and falling phosphor columns |
+| VIOLET | Grid | Softer cards, underlined focus, and expanding energy bands |
+| ICE | List | Faceted selection chevrons and snow-cross motion |
+| FLIPPER | Grid | Compact orange focus rails and RF chevrons, without a mascot |
+| RETRO | Grid | Square CRT cards, top scan rails, and a moving scanline |
+| TERMINAL | List | Flat command rows, cursor markers, and phosphor rain |
+| NEON | Grid | Double-outline cards, split headers, and orbit animation |
+
+Theme animation is paused during timing-sensitive Sub-GHz record, replay, and
+RF Test operations.
 
 ### Status
 

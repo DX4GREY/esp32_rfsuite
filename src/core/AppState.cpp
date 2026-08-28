@@ -189,6 +189,7 @@ void AppState::cycleDisplayTheme(int direction) {
     int current = static_cast<int>(displayTheme);
     current = (current + direction + DISPLAY_THEME_COUNT) % DISPLAY_THEME_COUNT;
     displayTheme = static_cast<DisplayThemeId>(current);
+    applyThemeProfile();
     markSettingsDirty();
 }
 
@@ -199,16 +200,27 @@ const char* AppState::getDisplayThemeName() const {
         case DISPLAY_THEME_MATRIX: return "MATRIX";
         case DISPLAY_THEME_VIOLET: return "VIOLET";
         case DISPLAY_THEME_ICE:    return "ICE";
+        case DISPLAY_THEME_FLIPPER:return "FLIPPER";
+        case DISPLAY_THEME_RETRO:  return "RETRO";
+        case DISPLAY_THEME_TERMINAL:return "TERMINAL";
+        case DISPLAY_THEME_NEON:   return "NEON";
         case DISPLAY_THEME_CYBER:
         default:                   return "CYBER";
     }
 }
 
-void AppState::cycleMenuLayout(int direction) {
-    int current = static_cast<int>(menuLayout);
-    current = (current + direction + MENU_LAYOUT_COUNT) % MENU_LAYOUT_COUNT;
-    menuLayout = static_cast<MenuLayout>(current);
-    markSettingsDirty();
+void AppState::applyThemeProfile() {
+    switch (displayTheme) {
+        case DISPLAY_THEME_OCEAN:
+        case DISPLAY_THEME_MATRIX:
+        case DISPLAY_THEME_ICE:
+        case DISPLAY_THEME_TERMINAL:
+            menuLayout = MENU_LAYOUT_LIST;
+            break;
+        default:
+            menuLayout = MENU_LAYOUT_GRID;
+            break;
+    }
 }
 
 const char* AppState::getMenuLayoutName() const {

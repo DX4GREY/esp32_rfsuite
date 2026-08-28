@@ -222,6 +222,7 @@ void DisplayManager::updateUI() {
             renderShutdownScreen();
             break;
     }
+    drawThemeAnimation();
 }
 
 // =============================================================================
@@ -798,10 +799,10 @@ void DisplayManager::processInput() {
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_SETTINGS) {
         if (buttonManager.isPressed(BTN_UP)) {
-            settingsSelection = (settingsSelection + 4) % 5;
+            settingsSelection = (settingsSelection + 3) % 4;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_DOWN)) {
-            settingsSelection = (settingsSelection + 1) % 5;
+            settingsSelection = (settingsSelection + 1) % 4;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             if (settingsSelection == 0) {
@@ -815,9 +816,8 @@ void DisplayManager::processInput() {
                 // Force one clean page rebuild so no pixels from the previous
                 // palette remain. Normal updates stay partial afterwards.
                 renderedMode = -1;
-            } else if (settingsSelection == 3) {
-                appState.cycleMenuLayout(1);
                 menuScrollOffset = prevMenuScrollOffset = 0;
+                mainMenuScrollOffset = subGhzMenuScrollOffset = 0;
             } else if (storageManager.usingSd()) {
                 appState.saveSniffPacketsToSd = !appState.saveSniffPacketsToSd;
                 appState.markSettingsDirty();

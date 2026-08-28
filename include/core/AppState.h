@@ -102,7 +102,7 @@ struct AppState {
     const char* getDwellTimeName() const;
     void cycleDisplayTheme(int direction = 1);
     const char* getDisplayThemeName() const;
-    void cycleMenuLayout(int direction = 1);
+    void applyThemeProfile();
     const char* getMenuLayoutName() const;
 
     void cycleAnalyzerBand(int direction = 1);
