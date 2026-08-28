@@ -212,6 +212,10 @@ bool RadioManager::init() {
         Serial.printf("nRF24 ready: R1=%s R2=%s (%u active)\n",
                       okA ? "OK" : "OFFLINE", okB ? "OK" : "OFFLINE",
                       availableRadioCount());
+        if (availableRadioCount() == 1) {
+            Serial.printf("nRF24 single-radio mode: using R%u for all features\n",
+                          radio1Available ? 1U : 2U);
+        }
         Serial.println("   Use the display menu or type 'help' in Serial.\n");
         return true;
     }
@@ -381,23 +385,27 @@ void RadioManager::requestScanAbort() { scanAbortRequested = true; }
 bool RadioManager::startPacketSniffer(uint8_t channel, SnifferDataRate rate) {
     stopJammer();
     scanAbortRequested = true;
-    if (!radio1Available) {
-        Serial.println("[sniffer] radio 1 is unavailable");
+    if (!hasAnyRadio()) {
+        Serial.println("[sniffer] no radio is available");
         return false;
     }
     if (!lockBus()) {
         Serial.println("[sniffer] SPI bus timeout during start");
         return false;
     }
-    const bool ok = packetSniffer.start(radio, SPI, CE_PIN, CSN_PIN, channel, rate);
+    snifferUsesRadio2 = !radio1Available && radio2Available;
+    RF24& target = snifferUsesRadio2 ? radio2 : radio;
+    const uint8_t cePin = snifferUsesRadio2 ? CE_PIN_2 : CE_PIN;
+    const uint8_t csnPin = snifferUsesRadio2 ? CSN_PIN_2 : CSN_PIN;
+    const bool ok = packetSniffer.start(target, SPI, cePin, csnPin, channel, rate);
     if (!ok) {
-        packetSniffer.stop(radio);
-        radio.flush_rx();
-        radio.setAddressWidth(5);
-        radio.setAutoAck(false);
-        radio.setDataRate(RF24_2MBPS);
-        radio.setCRCLength(RF24_CRC_DISABLED);
-        radio.startListening();
+        packetSniffer.stop(target);
+        target.flush_rx();
+        target.setAddressWidth(5);
+        target.setAutoAck(false);
+        target.setDataRate(RF24_2MBPS);
+        target.setCRCLength(RF24_CRC_DISABLED);
+        target.startListening();
     }
     unlockBus();
     if (!ok) packetSniffer.closeStorage();
@@ -410,14 +418,14 @@ void RadioManager::stopPacketSniffer() {
         Serial.println("[sniffer] SPI bus timeout during stop");
         return;
     }
-    packetSniffer.stop(radio);
-    // Restore only radio 1 to the normal passive analyzer configuration.
-    radio.flush_rx();
-    radio.setAddressWidth(5);
-    radio.setAutoAck(false);
-    radio.setDataRate(RF24_2MBPS);
-    radio.setCRCLength(RF24_CRC_DISABLED);
-    radio.startListening();
+    RF24& target = snifferUsesRadio2 ? radio2 : radio;
+    packetSniffer.stop(target);
+    target.flush_rx();
+    target.setAddressWidth(5);
+    target.setAutoAck(false);
+    target.setDataRate(RF24_2MBPS);
+    target.setCRCLength(RF24_CRC_DISABLED);
+    target.startListening();
     unlockBus();
     packetSniffer.closeStorage();
 }
@@ -425,7 +433,8 @@ void RadioManager::stopPacketSniffer() {
 bool RadioManager::servicePacketSniffer() {
     if (!packetSniffer.isRunning()) return false;
     if (!lockBus(pdMS_TO_TICKS(20))) return false;
-    const bool captured = packetSniffer.poll(radio);
+    RF24& target = snifferUsesRadio2 ? radio2 : radio;
+    const bool captured = packetSniffer.poll(target);
     unlockBus();
     packetSniffer.serviceStorage();
     return captured;
@@ -433,14 +442,16 @@ bool RadioManager::servicePacketSniffer() {
 
 bool RadioManager::setPacketSnifferChannel(uint8_t channel) {
     if (!packetSniffer.isRunning() || !lockBus()) return false;
-    const bool ok = packetSniffer.setChannel(radio, channel);
+    RF24& target = snifferUsesRadio2 ? radio2 : radio;
+    const bool ok = packetSniffer.setChannel(target, channel);
     unlockBus();
     return ok;
 }
 
 bool RadioManager::setPacketSnifferDataRate(SnifferDataRate rate) {
     if (!packetSniffer.isRunning() || !lockBus()) return false;
-    const bool ok = packetSniffer.setDataRate(radio, rate);
+    RF24& target = snifferUsesRadio2 ? radio2 : radio;
+    const bool ok = packetSniffer.setDataRate(target, rate);
     unlockBus();
     return ok;
 }
@@ -457,11 +468,12 @@ bool RadioManager::transmitProbePacket(uint8_t channel, uint8_t pa, uint8_t rate
 #if !RF_LAB_TX_ENABLED
     (void)channel;(void)pa;(void)rate;(void)size;(void)payload;return false;
 #else
-    if(!radio1Available||channel>125||pa>RF24_PA_MAX||(rate!=RF24_250KBPS&&rate!=RF24_1MBPS&&rate!=RF24_2MBPS)||size<1||size>32||payload==nullptr)return false;
+    if(!hasAnyRadio()||channel>125||pa>RF24_PA_MAX||(rate!=RF24_250KBPS&&rate!=RF24_1MBPS&&rate!=RF24_2MBPS)||size<1||size>32||payload==nullptr)return false;
     if(!lockBus(pdMS_TO_TICKS(50)))return false;
-    radio.ce(LOW);radio.stopListening();radio.setChannel(channel);radio.setPALevel(static_cast<rf24_pa_dbm_e>(pa),true);
-    radio.setDataRate(static_cast<rf24_datarate_e>(rate));radio.setAutoAck(false);radio.setRetries(0,0);radio.setPayloadSize(size);radio.setCRCLength(RF24_CRC_16);
-    const bool ok=radio.write(payload,size,false);radio.ce(LOW);radio.flush_tx();radio.startListening();unlockBus();rxModeActive=true;return ok;
+    RF24& target=radio1Available?radio:radio2;
+    target.ce(LOW);target.stopListening();target.setChannel(channel);target.setPALevel(static_cast<rf24_pa_dbm_e>(pa),true);
+    target.setDataRate(static_cast<rf24_datarate_e>(rate));target.setAutoAck(false);target.setRetries(0,0);target.setPayloadSize(size);target.setCRCLength(RF24_CRC_16);
+    const bool ok=target.write(payload,size,false);target.ce(LOW);target.flush_tx();target.startListening();unlockBus();rxModeActive=true;return ok;
 #endif
 }
 

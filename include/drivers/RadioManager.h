@@ -25,7 +25,7 @@ public:
     bool sampleCarrier(uint8_t channel, uint16_t requested, uint16_t& hits, uint16_t& samples);
     bool transmitProbePacket(uint8_t channel, uint8_t pa, uint8_t rate, uint8_t size, const uint8_t* payload);
 
-    // Passive raw-payload capture on radio 1. Radio 2 is never reconfigured.
+    // Passive raw-payload capture using whichever receiver is available.
     bool startPacketSniffer(uint8_t channel, SnifferDataRate rate);
     void stopPacketSniffer();
     bool servicePacketSniffer();
@@ -62,6 +62,7 @@ private:
     volatile bool stopJam = false;
     volatile bool scanActive = false;
     volatile bool scanAbortRequested = false;
+    bool snifferUsesRadio2 = false;
 
     bool lockBus(TickType_t timeout = pdMS_TO_TICKS(100));
     void unlockBus();

@@ -75,7 +75,7 @@ bool PacketSniffer::start(RF24& target, SPIClass& spi, uint8_t cePin,
     target.startListening();                          // PRIM_RX = 1, CE = HIGH
 
     running = true;
-    Serial.printf("[sniffer] started R1 ch=%u rate=%s address-width=2(experimental)\n",
+    Serial.printf("[sniffer] started ch=%u rate=%s address-width=2(experimental)\n",
                   activeChannel,
                   activeRate == SnifferDataRate::RATE_1_MBPS ? "1Mbps" : "2Mbps");
     return true;
