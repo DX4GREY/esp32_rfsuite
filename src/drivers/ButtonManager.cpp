@@ -1,6 +1,25 @@
 #include "drivers/ButtonManager.h"
+#include "core/AppState.h"
 
 ButtonManager buttonManager;
+
+namespace {
+int physicalPinFor(int logicalPin) {
+    static const int clockwisePins[4] = {BTN_UP, BTN_A, BTN_DOWN, BTN_B};
+    int logicalIndex = -1;
+    for (int i = 0; i < 4; ++i) {
+        if (clockwisePins[i] == logicalPin) {
+            logicalIndex = i;
+            break;
+        }
+    }
+    if (logicalIndex < 0) return logicalPin;
+    // Rotation 3 is the board default. Each clockwise display rotation shifts
+    // the logical controls by one physical position around the enclosure.
+    const int rotationSteps = (appState.displayRotation + 1) % 4;
+    return clockwisePins[(logicalIndex + rotationSteps) % 4];
+}
+}
 
 void ButtonManager::init() {
     pinMode(BTN_UP, INPUT_PULLUP);
@@ -10,6 +29,7 @@ void ButtonManager::init() {
 }
 
 int ButtonManager::getPinIndex(int pin) {
+    pin = physicalPinFor(pin);
     if (pin == BTN_UP) return 0;
     if (pin == BTN_A) return 1;
     if (pin == BTN_DOWN) return 2;
@@ -18,10 +38,11 @@ int ButtonManager::getPinIndex(int pin) {
 }
 
 int ButtonManager::readButton(int pin) {
+    // Preserve each control's screen-relative meaning at every rotation.
     int idx = getPinIndex(pin);
     if (idx < 0) return HIGH;
 
-    int raw = digitalRead(pin);
+    int raw = digitalRead(physicalPinFor(pin));
     unsigned long now = millis();
 
     if (raw != stableState[idx]) {
@@ -55,13 +76,15 @@ bool ButtonManager::inputSuppressed(int idx, int state) {
 
 void ButtonManager::suppressHeldButtons() {
     const int pins[4] = {BTN_UP, BTN_A, BTN_DOWN, BTN_B};
-    for (int idx = 0; idx < 4; ++idx) {
-        const int state = readButton(pins[idx]);
-        suppressedUntilRelease[idx] = state == LOW;
-        prevState[idx] = state;
-        holdStartTime[idx] = 0;
-        holdReported[idx] = false;
-        shortStartTime[idx] = 0;
+    for (int logicalIdx = 0; logicalIdx < 4; ++logicalIdx) {
+        const int pin = pins[logicalIdx];
+        const int physicalIdx = getPinIndex(pin);
+        const int state = readButton(pin);
+        suppressedUntilRelease[physicalIdx] = state == LOW;
+        prevState[physicalIdx] = state;
+        holdStartTime[physicalIdx] = 0;
+        holdReported[physicalIdx] = false;
+        shortStartTime[physicalIdx] = 0;
     }
 }
 

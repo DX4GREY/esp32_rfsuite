@@ -29,6 +29,9 @@ struct AppState {
     rf24_datarate_e dataRate = DEFAULT_RATE;
     volatile int dwellTimeUs = JAMMER_DWELL_US;
     DisplayThemeId displayTheme = DISPLAY_THEME_CYBER;
+    // Adafruit GFX rotation: 0/2 portrait, 1/3 landscape. The default panel
+    // mounting uses rotation 3.
+    uint8_t displayRotation = 3;
     MenuLayout menuLayout = MENU_LAYOUT_GRID;
     bool saveSniffPacketsToSd = false;
     uint8_t subGhzRadioPreset = 1;
@@ -102,6 +105,8 @@ struct AppState {
     const char* getDwellTimeName() const;
     void cycleDisplayTheme(int direction = 1);
     const char* getDisplayThemeName() const;
+    const char* getDisplayOrientationName() const;
+    void cycleDisplayOrientation();
     void applyThemeProfile();
     const char* getMenuLayoutName() const;
 

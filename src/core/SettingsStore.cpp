@@ -4,7 +4,7 @@
 #include "core/RfEnvironmentMath.h"
 
 namespace {
-constexpr uint8_t SETTINGS_SCHEMA_VERSION = 7;
+constexpr uint8_t SETTINGS_SCHEMA_VERSION = 8;
 constexpr unsigned long SETTINGS_SAVE_DELAY_MS = 1500;
 }
 
@@ -90,6 +90,9 @@ void AppState::loadSettings() {
         const uint8_t repeats = prefs.getUChar("sub_rep", 1);
         subGhzReplayRepeats = repeats >= 5 ? 5 : (repeats >= 3 ? 3 : 1);
     }
+    if (storedSchema >= 8) {
+        displayRotation = constrain(prefs.getUChar("display_rot", 3), 0, 3);
+    }
     prefs.end();
 
     setJammerTarget(jammerTarget);
@@ -107,6 +110,7 @@ void AppState::saveSettings() {
     prefs.putUChar("profile", static_cast<uint8_t>(scanProfile));
     prefs.putInt("custom", customSpectrumSamples);
     prefs.putUChar("theme", static_cast<uint8_t>(displayTheme));
+    prefs.putUChar("display_rot", displayRotation);
     prefs.putBool("sniff_sd", saveSniffPacketsToSd);
     prefs.putUChar("sub_pre", subGhzRadioPreset);
     prefs.putUChar("sub_reg", subGhzRegion);
@@ -159,6 +163,7 @@ void AppState::factoryResetSettings() {
     powerLevel = DEFAULT_POWER;
     dwellTimeUs = JAMMER_DWELL_US;
     displayTheme = DISPLAY_THEME_CYBER;
+    displayRotation = 3;
     applyThemeProfile();
     saveSniffPacketsToSd = false;
     subGhzRadioPreset = 1;

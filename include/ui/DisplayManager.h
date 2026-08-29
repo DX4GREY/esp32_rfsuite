@@ -13,6 +13,7 @@ public:
     void processInput();
     void updateUI();
     void requestRedraw();
+    void applyOrientation();
     void showSplash();
     void prepareForShutdown();
     bool replaySubGhzFile(const String& name);
@@ -179,6 +180,7 @@ private:
     int previousSettingsSelection = -1;
     int previousSettingsTheme = -1;
     int previousSettingsSniffSave = -1;
+    int previousSettingsOrientation = -1;
     int previousPowerSelection = -1;
     int previousSubPreset = -1;
     int previousSubRegion = -1;

@@ -799,10 +799,10 @@ void DisplayManager::processInput() {
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_SETTINGS) {
         if (buttonManager.isPressed(BTN_UP)) {
-            settingsSelection = (settingsSelection + 3) % 4;
+            settingsSelection = (settingsSelection + 4) % 5;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_DOWN)) {
-            settingsSelection = (settingsSelection + 1) % 4;
+            settingsSelection = (settingsSelection + 1) % 5;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             if (settingsSelection == 0) {
@@ -818,9 +818,13 @@ void DisplayManager::processInput() {
                 renderedMode = -1;
                 menuScrollOffset = prevMenuScrollOffset = 0;
                 mainMenuScrollOffset = subGhzMenuScrollOffset = 0;
-            } else if (storageManager.usingSd()) {
+            } else if (settingsSelection == 3 && storageManager.usingSd()) {
                 appState.saveSniffPacketsToSd = !appState.saveSniffPacketsToSd;
                 appState.markSettingsDirty();
+            } else if (settingsSelection == 4) {
+                appState.cycleDisplayOrientation();
+                applyOrientation();
+                buttonManager.suppressHeldButtons();
             }
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {

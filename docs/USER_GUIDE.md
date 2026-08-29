@@ -238,6 +238,7 @@ Use `UP/DOWN` to select and `A` to advance the value.
 | TX Dwell | Preset microsecond values | Applied to nRF24 hopping and the CC1101 RF Test sweep |
 | UI Theme | CYBER, OCEAN, AMBER, MATRIX, VIOLET, ICE, FLIPPER, RETRO, TERMINAL, NEON | Controls colors, menu layout, geometry, and animation |
 | Sniff to SD | OFF, SD CARD | Controls nRF24 packet-sniffer saving when an SD card is mounted |
+| Orientation | LANDSCAPE, PORTRAIT, LANDSCAPE FLIP, PORTRAIT FLIP | Rotates the display in 90-degree steps and rotates all four button functions to match |
 
 Menu View is no longer separate. OCEAN, MATRIX, ICE, and TERMINAL use a List
 layout; the other profiles use Grid. Themes also own their card silhouette,

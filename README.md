@@ -252,7 +252,7 @@ file format, replay progress controls, and remote compatibility, see the
 | RX Only / RF Test | RX-only notice in the default profile; controlled transmission screen in the lab profile | Lab profile: `UP/DOWN`: target, `A`: start or stop |
 | Radio Diag | Check Radio 1 and Radio 2 connectivity | `A`: refresh |
 | Profiles | Select analyzer sampling depth | `UP/DOWN`: profile, `A`: change CUSTOM value |
-| Settings | Configure RF power, dwell time, complete UI theme, and packet saving | `UP/DOWN`: select field, `A`: next value |
+| Settings | Configure RF power, dwell time, UI theme, packet saving, and orientation | `UP/DOWN`: select field, `A`: next value |
 | Status | Hardware, memory, radio/software, and performance data | `UP/DOWN`: page, `A`: refresh |
 | Power | Restart or enter deep sleep | `UP/DOWN`: option, `A`: confirm |
 
@@ -370,7 +370,7 @@ A radio status of `CONNECTED` confirms SPI communication with the chip. It does 
 
 ## NVS persistence
 
-The current settings use schema version 6, validation, migration, and a
+The current settings use schema version 8, validation, migration, and a
 1.5-second deferred write. It also stores menu layout, packet-sniffer SD
 logging, CC1101 preset, TX-region policy, Sub-GHz trigger configuration, and
 replay count.

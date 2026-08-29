@@ -74,6 +74,7 @@ void DisplayManager::resetDynamicCaches() {
     previousSettingsSelection = -1;
     previousSettingsTheme = -1;
     previousSettingsSniffSave = -1;
+    previousSettingsOrientation = -1;
     previousPowerSelection = -1;
     previousSubPreset = previousSubRegion = previousSubRepeats = -1;
     previousSubTrigger = 999;
@@ -97,10 +98,18 @@ void DisplayManager::init() {
     digitalWrite(SD_CS_PIN, HIGH);
     displayStorageSpi().begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
     tft.initR(INITR_BLACKTAB);   // ST7735 128x160
-    tft.setRotation(3);          // Landscape 160 x 128
+    tft.setRotation(appState.displayRotation);
     tft.fillScreen(ST77XX_BLACK);
     tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
     tft.setTextSize(1);
+    needRedraw = true;
+}
+
+void DisplayManager::applyOrientation() {
+    tft.setRotation(appState.displayRotation);
+    tft.fillScreen(ST77XX_BLACK);
+    renderedMode = -1;
+    resetDynamicCaches();
     needRedraw = true;
 }
 

@@ -209,6 +209,23 @@ const char* AppState::getDisplayThemeName() const {
     }
 }
 
+const char* AppState::getDisplayOrientationName() const {
+    switch (displayRotation) {
+        case 0: return "PORTRAIT";
+        case 1: return "LANDSCAPE FLIP";
+        case 2: return "PORTRAIT FLIP";
+        case 3:
+        default: return "LANDSCAPE";
+    }
+}
+
+void AppState::cycleDisplayOrientation() {
+    // Present rotations clockwise starting from the board's default mounting:
+    // landscape (3), portrait (0), reversed landscape (1), reversed portrait (2).
+    displayRotation = (displayRotation + 1) % 4;
+    markSettingsDirty();
+}
+
 void AppState::applyThemeProfile() {
     switch (displayTheme) {
         case DISPLAY_THEME_OCEAN:

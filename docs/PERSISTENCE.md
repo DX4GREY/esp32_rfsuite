@@ -57,8 +57,9 @@ Schema 0/legacy installations load the original keys. Schema 2 adds analyzer
 trace, event, and watch settings; schema 3 adds RF-environment and lab-probe
 settings; schema 4 added the legacy standalone menu layout; schema 5 adds
 packet-sniffer SD logging; schema 6 adds Sub-GHz settings; schema 7 folds menu
-layout into the selected theme. The old `menu_view` key is ignored. Missing
-newer fields use defaults and schedule one deferred schema-7 save. Every loaded
+layout into theme profiles; schema 8 adds the four-way display orientation setting.
+The old `menu_view` key is ignored. Missing newer fields use defaults and
+schedule one deferred schema-8 save. Every loaded
 enum and numeric value is validated before use.
 
 Future migrations should:

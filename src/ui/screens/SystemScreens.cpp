@@ -35,8 +35,8 @@ void DisplayManager::renderSettingsScreen() {
         const bool selected = settingsSelection == item;
         const uint16_t background = selected ?
                                     SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
-        tft.fillRect(5, y, 150, 16, ST77XX_BLACK);
-        drawThemedMenuCard(5, y, 150, 16, selected, true, background,
+        tft.fillRect(5, y, 150, 15, ST77XX_BLACK);
+        drawThemedMenuCard(5, y, 150, 15, selected, true, background,
                            selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER);
         tft.setCursor(15, y + 4);
         tft.setTextColor(selected ? SPECTRUM_ACCENT : ST77XX_GRAY,
@@ -54,6 +54,7 @@ void DisplayManager::renderSettingsScreen() {
     else if (appState.powerLevel == RF24_PA_LOW) pwrColor = SPECTRUM_MID;
     else pwrColor = SPECTRUM_LOW;
     const int theme = static_cast<int>(appState.displayTheme);
+    const int orientation = appState.displayRotation;
     const int sniffState = !storageManager.usingSd() ? -1 : (appState.saveSniffPacketsToSd ? 1 : 0);
     auto dirtyRow = [&](int row) {
         return previousSettingsSelection < 0 || previousSettingsTheme != theme ||
@@ -61,23 +62,26 @@ void DisplayManager::renderSettingsScreen() {
                settingsSelection == row;
     };
     if (dirtyRow(0) || previousPowerLevel != static_cast<int>(appState.powerLevel))
-        drawSettingRow(0, 20, "TX POWER", appState.getPowerLevelName(), pwrColor);
+        drawSettingRow(0, 18, "TX POWER", appState.getPowerLevelName(), pwrColor);
     if (dirtyRow(1) || previousDwellTimeUs != appState.dwellTimeUs)
-        drawSettingRow(1, 42, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
+        drawSettingRow(1, 36, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
     if (dirtyRow(2) || previousSettingsTheme != theme)
-        drawSettingRow(2, 64, "UI THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
+        drawSettingRow(2, 54, "UI THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
     const char* sniffSave = !storageManager.usingSd() ? "NO SD" :
                             (appState.saveSniffPacketsToSd ? "SD CARD" : "OFF");
     const uint16_t sniffColor = !storageManager.usingSd() ? SPECTRUM_CRITICAL :
                                   (appState.saveSniffPacketsToSd ? SPECTRUM_LOW : ST77XX_GRAY);
     if (dirtyRow(3) || previousSettingsSniffSave != sniffState)
-        drawSettingRow(3, 86, "SNIFF TO SD", sniffSave, sniffColor);
+        drawSettingRow(3, 72, "SNIFF TO SD", sniffSave, sniffColor);
+    if (dirtyRow(4) || previousSettingsOrientation != orientation)
+        drawSettingRow(4, 90, "ORIENTATION", appState.getDisplayOrientationName(), SPECTRUM_ACCENT);
 
     previousSettingsSelection = settingsSelection;
     previousPowerLevel = static_cast<int>(appState.powerLevel);
     previousDwellTimeUs = appState.dwellTimeUs;
     previousSettingsTheme = theme;
     previousSettingsSniffSave = sniffState;
+    previousSettingsOrientation = orientation;
 }
 
 // =============================================================================
