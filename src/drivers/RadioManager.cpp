@@ -549,8 +549,15 @@ RadioManager::LoopbackResult RadioManager::runLoopbackDiagnostic(uint8_t channel
     for (uint8_t direction = 0; direction < 2; ++direction) {
         RF24& tx = *senders[direction]; RF24& rx = *receivers[direction];
         tx.stopListening(); rx.stopListening();
+        tx.powerUp(); rx.powerUp();
         tx.setChannel(channel); rx.setChannel(channel);
         tx.setDataRate(RF24_1MBPS); rx.setDataRate(RF24_1MBPS);
+        // Normalize every setting inherited from analyzer/jammer/sniffer use.
+        // PA_MIN also avoids receiver saturation when both onboard antennas
+        // are only a few centimeters apart.
+        tx.setPALevel(RF24_PA_MIN, true); rx.setPALevel(RF24_PA_MIN, true);
+        tx.setAddressWidth(5); rx.setAddressWidth(5);
+        tx.disableDynamicPayloads(); rx.disableDynamicPayloads();
         tx.setAutoAck(true); rx.setAutoAck(true);
         tx.setRetries(3, 5);
         tx.setCRCLength(RF24_CRC_16); rx.setCRCLength(RF24_CRC_16);
