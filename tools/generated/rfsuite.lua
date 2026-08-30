@@ -38,6 +38,17 @@
 ---@field analyzer_peak_rssi integer
 ---@field last_error string
 
+---@class RadioTestStatus
+---@field radio1_detected boolean
+---@field radio2_detected boolean
+---@field tx_test_enabled boolean
+---@field radio1_tx boolean
+---@field radio1_rx boolean
+---@field radio2_tx boolean
+---@field radio2_rx boolean
+---@field radio1_to_radio2 boolean
+---@field radio2_to_radio1 boolean
+
 ---@class RfApi
 ---@type RfApi
 rf = {}
@@ -66,6 +77,28 @@ function rf.spectrum() end
 ---Return current analyzer and recorder status.
 ---@return RfStatus
 function rf.status() end
+
+---Test each nRF24 connection and authorized bidirectional packet loopback.
+---@return RadioTestStatus
+function rf.radio_test() end
+
+---Atomically sample one nRF24 without changing the other radio; returns nil plus an error when the selected radio is busy.
+---@param radio integer
+---@param channel RfChannel
+---@param samples? integer Default: `64`.
+---@return integer Carrier-hit percentage, or nil on failure.
+---@return string Error when the first return is nil.
+function rf.radio_sample(radio, channel, samples) end
+
+---Atomically send one short packet through a selected nRF24 and restore its RX channel; authorized RF-lab build only.
+---@param radio integer
+---@param channel RfChannel
+---@param payload string
+---@param power? integer Default: `0`.
+---@param rate? string Default: `"1m"`.
+---@return boolean
+---@return string Error when transmission fails.
+function rf.radio_transmit(radio, channel, payload, power, rate) end
 
 ---Move the analyzer cursor.
 ---@param channel RfChannel

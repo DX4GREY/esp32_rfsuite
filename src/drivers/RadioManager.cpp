@@ -477,6 +477,39 @@ bool RadioManager::transmitProbePacket(uint8_t channel, uint8_t pa, uint8_t rate
 #endif
 }
 
+bool RadioManager::transmitProbePacketOnRadio(uint8_t radioIndex, uint8_t channel,
+                                              uint8_t pa, uint8_t rate, uint8_t size,
+                                              const uint8_t* payload) {
+#if !RF_LAB_TX_ENABLED
+    (void)radioIndex;(void)channel;(void)pa;(void)rate;(void)size;(void)payload;return false;
+#else
+    if (radioIndex < 1 || radioIndex > 2 || channel > 125 || pa > RF24_PA_MAX ||
+        (rate != RF24_250KBPS && rate != RF24_1MBPS && rate != RF24_2MBPS) ||
+        size < 1 || size > 32 || payload == nullptr) return false;
+    if ((radioIndex == 1 && !radio1Available) || (radioIndex == 2 && !radio2Available)) return false;
+    if (scanActive || (packetSniffer.isRunning() && ((radioIndex == 2) == snifferUsesRadio2))) return false;
+    if (!lockBus(pdMS_TO_TICKS(50))) return false;
+    if (scanActive || (packetSniffer.isRunning() && ((radioIndex == 2) == snifferUsesRadio2))) {
+        unlockBus(); return false;
+    }
+    RF24& target = radioIndex == 1 ? radio : radio2;
+    const uint8_t previousChannel = target.getChannel();
+    target.ce(LOW); target.stopListening(); target.setChannel(channel);
+    target.setPALevel(static_cast<rf24_pa_dbm_e>(pa), true);
+    target.setDataRate(static_cast<rf24_datarate_e>(rate)); target.setAutoAck(false);
+    target.setRetries(0, 0); target.setPayloadSize(size); target.setCRCLength(RF24_CRC_16);
+    target.flush_tx();
+    const bool queued = target.writeFast(payload, size, false);
+    const uint32_t started = millis();
+    while (queued && target.isFifo(true) != RF24_FIFO_EMPTY &&
+           millis() - started < 12) delay(1);
+    const bool ok = queued && target.isFifo(true) == RF24_FIFO_EMPTY;
+    target.ce(LOW); target.flush_tx(); target.setChannel(previousChannel); target.startListening();
+    unlockBus(); rxModeActive = true;
+    return ok;
+#endif
+}
+
 bool RadioManager::isConnected() {
     return hasAnyRadio();
 }
@@ -500,6 +533,62 @@ bool RadioManager::isRadio2Connected() {
 bool RadioManager::hasAnyRadio() const { return radio1Available || radio2Available; }
 uint8_t RadioManager::availableRadioCount() const {
     return static_cast<uint8_t>(radio1Available) + static_cast<uint8_t>(radio2Available);
+}
+RadioManager::LoopbackResult RadioManager::runLoopbackDiagnostic(uint8_t channel) {
+    LoopbackResult result;
+    result.radio1Detected = isRadio1Connected();
+    result.radio2Detected = isRadio2Connected();
+#if RF_LAB_TX_ENABLED
+    result.txTestEnabled = true;
+    if (!result.radio1Detected || !result.radio2Detected || !lockRadioBus()) return result;
+    RF24* senders[2] = {&radio, &radio2};
+    RF24* receivers[2] = {&radio2, &radio};
+    bool* txResults[2] = {&result.radio1Tx, &result.radio2Tx};
+    bool* rxResults[2] = {&result.radio2Rx, &result.radio1Rx};
+    const uint8_t address[6] = {'R','F','D','I','A',0};
+    for (uint8_t direction = 0; direction < 2; ++direction) {
+        RF24& tx = *senders[direction]; RF24& rx = *receivers[direction];
+        tx.stopListening(); rx.stopListening();
+        tx.setChannel(channel); rx.setChannel(channel);
+        tx.setDataRate(RF24_1MBPS); rx.setDataRate(RF24_1MBPS);
+        tx.setAutoAck(true); rx.setAutoAck(true);
+        tx.setRetries(3, 5);
+        tx.setCRCLength(RF24_CRC_16); rx.setCRCLength(RF24_CRC_16);
+        tx.setPayloadSize(8); rx.setPayloadSize(8);
+        tx.openWritingPipe(address); rx.openReadingPipe(1, address);
+        tx.flush_tx(); rx.flush_rx(); rx.startListening(); delay(3);
+        uint8_t payload[8] = {'R','F','T', direction, 0x5A, 0xA5, 0x3C, 0xC3};
+        // RF24::write() can wait forever when a detected-but-faulty module
+        // never raises TX_DS/MAX_RT. The FIFO was just flushed, so writeFast()
+        // is non-blocking here; poll completion with our own hard deadline.
+        const bool queued = tx.writeFast(payload, sizeof(payload), false);
+        const uint32_t txStarted = millis();
+        while (queued && tx.isFifo(true) != RF24_FIFO_EMPTY &&
+               millis() - txStarted < 12) delay(1);
+        *txResults[direction] = queued && tx.isFifo(true) == RF24_FIFO_EMPTY;
+        tx.ce(LOW);
+        if (!*txResults[direction]) tx.flush_tx();
+        const uint32_t started = millis();
+        while (!rx.available() && millis() - started < 40) delay(1);
+        if (rx.available()) {
+            uint8_t received[8] = {};
+            rx.read(received, sizeof(received));
+            *rxResults[direction] = memcmp(payload, received, sizeof(payload)) == 0;
+        }
+        const bool linkOk = *txResults[direction] && *rxResults[direction];
+        if (direction == 0) result.radio1To2 = linkOk;
+        else result.radio2To1 = linkOk;
+        // These legacy fields now only claim success when the complete
+        // sender-to-receiver path (including ACK and payload) was proven.
+        *txResults[direction] = linkOk;
+        *rxResults[direction] = linkOk;
+        rx.stopListening();
+    }
+    unlockBus(); enterRxMode();
+#else
+    (void)channel;
+#endif
+    return result;
 }
 uint32_t RadioManager::getBusContentions() const {
     portENTER_CRITICAL(&radioStatsMux);

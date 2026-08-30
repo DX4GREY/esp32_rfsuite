@@ -107,6 +107,19 @@ delays small and leave the loop when the user requests an exit.
 array index to an RF24 channel with `channel = index - 1`. Activity values and
 status fields are snapshots; call the function again to obtain newer data.
 
+### Independent nRF24 access
+
+| Function | Behavior |
+|---|---|
+| `rf.radio_test()` | Return per-module detection and loopback results |
+| `rf.radio_sample(radio, channel[, samples])` | Atomically sample only Radio 1 or 2; returns activity percentage or `nil,error` when busy |
+| `rf.radio_transmit(radio, channel, payload[, power[, rate]])` | Send one 1–32 byte packet through only the selected radio in `authorized_rf_lab` |
+
+The per-radio calls serialize access to the shared SPI bus, leave the other
+module untouched, and restore the selected receiver's previous channel. They
+return a busy error instead of taking a module currently used by spectrum scan
+or packet sniffing. `power` is `0..3`; `rate` is `250k`, `1m`, or `2m`.
+
 ### Analyzer control
 
 | Function | Behavior |

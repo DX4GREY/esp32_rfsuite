@@ -11,6 +11,31 @@ bool RadioManager::sampleCarrier(uint8_t channel, uint16_t requested, uint16_t& 
     unlockBus(); return true;
 }
 
+bool RadioManager::sampleCarrierOnRadio(uint8_t radioIndex, uint8_t channel,
+                                        uint16_t requested, uint16_t& hits,
+                                        uint16_t& samples) {
+    hits = samples = 0;
+    if (radioIndex < 1 || radioIndex > 2 || channel > MAX_CHANNEL || !requested) return false;
+    if ((radioIndex == 1 && !radio1Available) || (radioIndex == 2 && !radio2Available)) return false;
+    // Never steal a radio from a long-running acquisition. The caller can retry.
+    if (scanActive || (packetSniffer.isRunning() &&
+        ((radioIndex == 2) == snifferUsesRadio2))) return false;
+    if (!rxModeActive) enterRxMode();
+    if (!lockBus(pdMS_TO_TICKS(20))) return false;
+    if (scanActive || (packetSniffer.isRunning() &&
+        ((radioIndex == 2) == snifferUsesRadio2))) { unlockBus(); return false; }
+    RF24& target = radioIndex == 1 ? radio : radio2;
+    const uint8_t previousChannel = target.getChannel();
+    target.setChannel(channel); delayMicroseconds(35);
+    for (uint16_t i = 0; i < requested; ++i) {
+        if (target.testRPD() || target.testCarrier()) hits++;
+        samples++; delayMicroseconds(8);
+    }
+    target.setChannel(previousChannel);
+    unlockBus();
+    return true;
+}
+
 void RadioManager::scanSpectrum(void (*yieldCb)()) {
     if (!hasAnyRadio()) return;
     if (!rxModeActive) {

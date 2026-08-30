@@ -58,7 +58,18 @@ LuaEngine luaEngine;
   "---@field analyzer_running boolean",
   "---@field analyzer_peak_frequency number",
   "---@field analyzer_peak_rssi integer",
-  "---@field last_error string"
+  "---@field last_error string",
+  "",
+  "---@class RadioTestStatus",
+  "---@field radio1_detected boolean",
+  "---@field radio2_detected boolean",
+  "---@field tx_test_enabled boolean",
+  "---@field radio1_tx boolean",
+  "---@field radio1_rx boolean",
+  "---@field radio2_tx boolean",
+  "---@field radio2_rx boolean",
+  "---@field radio1_to_radio2 boolean",
+  "---@field radio2_to_radio1 boolean"
  ],
  "functions":[
   {"name":"millis","description":"Return the device uptime.","returns":[{"type":"integer","description":"Milliseconds since boot."}]},
@@ -67,6 +78,9 @@ LuaEngine luaEngine;
   {"name":"log","description":"Append a timestamped message to the Lua log on the SD card.","params":[{"name":"message","type":"string"}]},
   {"name":"spectrum","description":"Return a snapshot of all channel activity values.","returns":[{"type":"integer[]","description":"126 values; index 1 represents RF channel 0."}]},
   {"name":"status","description":"Return current analyzer and recorder status.","returns":[{"type":"RfStatus"}]},
+  {"name":"radio_test","description":"Test each nRF24 connection and authorized bidirectional packet loopback.","returns":[{"type":"RadioTestStatus"}]},
+  {"name":"radio_sample","description":"Atomically sample one nRF24 without changing the other radio; returns nil plus an error when the selected radio is busy.","params":[{"name":"radio","type":"integer"},{"name":"channel","type":"RfChannel"},{"name":"samples","type":"integer","default":"64"}],"returns":[{"type":"integer","description":"Carrier-hit percentage, or nil on failure."},{"type":"string","description":"Error when the first return is nil."}]},
+  {"name":"radio_transmit","description":"Atomically send one short packet through a selected nRF24 and restore its RX channel; authorized RF-lab build only.","params":[{"name":"radio","type":"integer"},{"name":"channel","type":"RfChannel"},{"name":"payload","type":"string"},{"name":"power","type":"integer","default":"0"},{"name":"rate","type":"string","default":"\"1m\""}],"returns":[{"type":"boolean"},{"type":"string","description":"Error when transmission fails."}]},
   {"name":"set_cursor","description":"Move the analyzer cursor.","params":[{"name":"channel","type":"RfChannel"}]},
   {"name":"freeze","description":"Freeze or resume analyzer acquisition.","params":[{"name":"frozen","type":"boolean"}]},
   {"name":"set_band","description":"Select the analyzer scan band.","params":[{"name":"band","type":"RfBand"}]},
@@ -244,6 +258,59 @@ int rfSubGhzStatus(lua_State* state) {
     return 1;
 }
 
+int rfRadioTest(lua_State* state) {
+    const RadioManager::LoopbackResult result = radioManager.runLoopbackDiagnostic();
+    lua_newtable(state);
+#define RADIO_TEST_BOOL(name, value) lua_pushboolean(state, value); lua_setfield(state, -2, name)
+    RADIO_TEST_BOOL("radio1_detected", result.radio1Detected);
+    RADIO_TEST_BOOL("radio2_detected", result.radio2Detected);
+    RADIO_TEST_BOOL("tx_test_enabled", result.txTestEnabled);
+    RADIO_TEST_BOOL("radio1_tx", result.radio1Tx);
+    RADIO_TEST_BOOL("radio1_rx", result.radio1Rx);
+    RADIO_TEST_BOOL("radio2_tx", result.radio2Tx);
+    RADIO_TEST_BOOL("radio2_rx", result.radio2Rx);
+    RADIO_TEST_BOOL("radio1_to_radio2", result.radio1To2);
+    RADIO_TEST_BOOL("radio2_to_radio1", result.radio2To1);
+#undef RADIO_TEST_BOOL
+    return 1;
+}
+
+int rfRadioSample(lua_State* state) {
+    const int radio = luaL_checkinteger(state, 1);
+    const int channel = luaL_checkinteger(state, 2);
+    const int requested = luaL_optinteger(state, 3, 64);
+    luaL_argcheck(state, radio == 1 || radio == 2, 1, "radio must be 1 or 2");
+    luaL_argcheck(state, channel >= 0 && channel <= 125, 2, "channel must be 0..125");
+    luaL_argcheck(state, requested >= 1 && requested <= 512, 3, "samples must be 1..512");
+    uint16_t hits = 0, samples = 0;
+    if (!radioManager.sampleCarrierOnRadio(radio, channel, requested, hits, samples)) {
+        lua_pushnil(state); lua_pushstring(state, "radio unavailable or busy"); return 2;
+    }
+    lua_pushinteger(state, samples ? hits * 100U / samples : 0); return 1;
+}
+
+int rfRadioTransmit(lua_State* state) {
+    const int radio = luaL_checkinteger(state, 1);
+    const int channel = luaL_checkinteger(state, 2);
+    size_t size = 0; const char* payload = luaL_checklstring(state, 3, &size);
+    const int power = luaL_optinteger(state, 4, RF24_PA_MIN);
+    String rateName = luaL_optstring(state, 5, "1m"); rateName.toLowerCase();
+    uint8_t rate;
+    if (rateName == "250k") rate = RF24_250KBPS;
+    else if (rateName == "1m") rate = RF24_1MBPS;
+    else if (rateName == "2m") rate = RF24_2MBPS;
+    else return luaL_error(state, "rate must be 250k, 1m, or 2m");
+    luaL_argcheck(state, radio == 1 || radio == 2, 1, "radio must be 1 or 2");
+    luaL_argcheck(state, channel >= 0 && channel <= 125, 2, "channel must be 0..125");
+    luaL_argcheck(state, size >= 1 && size <= 32, 3, "payload must be 1..32 bytes");
+    luaL_argcheck(state, power >= RF24_PA_MIN && power <= RF24_PA_MAX, 4, "power must be 0..3");
+    const bool ok = radioManager.transmitProbePacketOnRadio(
+        radio, channel, power, rate, size, reinterpret_cast<const uint8_t*>(payload));
+    lua_pushboolean(state, ok);
+    if (ok) return 1;
+    lua_pushstring(state, "TX disabled, radio unavailable, or radio busy"); return 2;
+}
+
 bool supportedSubGhzFrequency(float mhz) {
     return (mhz >= 300.0f && mhz <= 348.0f) ||
            (mhz >= 387.0f && mhz <= 464.0f) ||
@@ -395,7 +462,14 @@ int rfButton(lua_State* state) {
 int rfDelay(lua_State* state) {
     const int duration = luaL_checkinteger(state, 1);
     luaL_argcheck(state, duration >= 0 && duration <= 1000, 1, "delay must be 0..1000 ms");
-    watchdog.feed(); delay(duration); watchdog.feed(); return 0;
+    const uint32_t started = millis();
+    do {
+        subGhzRawService.service();
+        watchdog.feed();
+        if (millis() - started >= static_cast<uint32_t>(duration)) break;
+        delay(min(5, duration));
+    } while (true);
+    watchdog.feed(); return 0;
 }
 
 int rfLabStart(lua_State* state) {
@@ -469,6 +543,9 @@ bool LuaEngine::run(const String& requestedName, Stream& output) {
     lua_pushcfunction(state, rfLog); lua_setfield(state, -2, "log");
     lua_pushcfunction(state, rfSpectrum); lua_setfield(state, -2, "spectrum");
     lua_pushcfunction(state, rfStatus); lua_setfield(state, -2, "status");
+    lua_pushcfunction(state, rfRadioTest); lua_setfield(state, -2, "radio_test");
+    lua_pushcfunction(state, rfRadioSample); lua_setfield(state, -2, "radio_sample");
+    lua_pushcfunction(state, rfRadioTransmit); lua_setfield(state, -2, "radio_transmit");
     lua_pushcfunction(state, rfSetCursor); lua_setfield(state, -2, "set_cursor");
     lua_pushcfunction(state, rfFreeze); lua_setfield(state, -2, "freeze");
     lua_pushcfunction(state, rfSetBand); lua_setfield(state, -2, "set_band");

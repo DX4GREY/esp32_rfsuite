@@ -9,6 +9,13 @@
 
 class RadioManager {
 public:
+    struct LoopbackResult {
+        bool radio1Detected = false, radio2Detected = false;
+        bool txTestEnabled = false;
+        bool radio1Tx = false, radio1Rx = false;
+        bool radio2Tx = false, radio2Rx = false;
+        bool radio1To2 = false, radio2To1 = false;
+    };
     RadioManager();
     bool init();
 
@@ -23,7 +30,11 @@ public:
     void requestScanAbort();
     uint8_t inspectChannel(int channel);
     bool sampleCarrier(uint8_t channel, uint16_t requested, uint16_t& hits, uint16_t& samples);
+    bool sampleCarrierOnRadio(uint8_t radioIndex, uint8_t channel, uint16_t requested,
+                              uint16_t& hits, uint16_t& samples);
     bool transmitProbePacket(uint8_t channel, uint8_t pa, uint8_t rate, uint8_t size, const uint8_t* payload);
+    bool transmitProbePacketOnRadio(uint8_t radioIndex, uint8_t channel, uint8_t pa,
+                                    uint8_t rate, uint8_t size, const uint8_t* payload);
 
     // Passive raw-payload capture using whichever receiver is available.
     bool startPacketSniffer(uint8_t channel, SnifferDataRate rate);
@@ -45,6 +56,7 @@ public:
     uint32_t getBusTimeouts() const;
     uint32_t getMaxBusWaitUs() const;
     uint32_t getAverageBusWaitUs() const;
+    LoopbackResult runLoopbackDiagnostic(uint8_t channel = 76);
     static constexpr bool transmitFeaturesEnabled() {
 #if RF_LAB_TX_ENABLED
         return true;
