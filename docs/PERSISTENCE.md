@@ -14,13 +14,19 @@ The current schema version is `6`.
 
 | Key | Type | Default | Validation / meaning |
 |---|---|---|---|
-| `schema` | unsigned byte | `7` when first saved | Persistence schema version |
+| `schema` | unsigned byte | `10` when first saved | Persistence schema version |
 | `power` | integer | `RF24_PA_MAX` | Four global TX levels mapped to nRF24 PA and CC1101 PA-table values |
 | `dwell` | integer | `200` | Global nRF24/CC1101 lab hop dwell, clamped to `10–10000` µs |
 | `target` | unsigned byte | Wi-Fi | Must be one of six target enums |
 | `profile` | unsigned byte | BALANCED | FAST, BALANCED, DEEP, or CUSTOM |
 | `custom` | integer | `40` | Clamped to `10–100` samples |
 | `theme` | unsigned byte | CYBER | One of ten UI profiles; selects palette, menu layout, geometry, and animation |
+| `animations` | boolean | `true` | Enables decorative splash and menu-focus animation globally |
+| `anim_boot` | boolean | `true` | Enables animated boot splash |
+| `anim_menu` | boolean | `true` | Enables menu-focus transitions |
+| `anim_theme` | boolean | `true` | Enables periodic theme/header effects |
+| `anim_active` | boolean | `true` | Enables decorative activity-screen motion |
+| `anim_speed` | unsigned byte | `1` | Animation speed: 0 slow, 1 normal, or 2 fast |
 | `sniff_sd` | boolean | `false` | Save packet-sniffer records to SD when mounted |
 | `sub_pre` | unsigned byte | OOK 650 kHz | CC1101 modulation preset, validated `0–4` |
 | `sub_reg` | unsigned byte | RX ONLY | Sub-GHz TX policy: RX ONLY, ETSI, or FCC |

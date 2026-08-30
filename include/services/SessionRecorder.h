@@ -5,14 +5,24 @@
 struct AppState;
 class RfEnvironmentState;
 
+struct ChannelDelta {
+    uint8_t channel = 0;
+    int16_t delta = 0;
+};
+
 struct SessionComparison {
     uint32_t previousSweeps = 0;
     uint32_t currentSweeps = 0;
     uint8_t previousPeakChannel = 0;
     uint8_t currentPeakChannel = 0;
+    uint8_t previousPeakLevel = 0;
+    uint8_t currentPeakLevel = 0;
     uint8_t previousAverage = 0;
     uint8_t currentAverage = 0;
     int16_t averageDelta = 0;
+    uint8_t previousChannelAvg[126] = {};
+    uint8_t currentChannelAvg[126] = {};
+    ChannelDelta topDeltas[5] = {};
 };
 
 class SessionRecorder {
@@ -29,6 +39,11 @@ public:
     bool exportCsv(Stream& output);
     bool replayLatest(AppState& state);
     bool compareWithPrevious(SessionComparison& result);
+    bool deleteCurrentSession();
+    bool hasCurrentSession() const;
+    bool hasPreviousSession() const;
+    bool summarizeCurrent(uint32_t& sweeps, uint8_t& peakChannel, uint8_t& peakLevel, uint8_t& average);
+    bool summarizePrevious(uint32_t& sweeps, uint8_t& peakChannel, uint8_t& peakLevel, uint8_t& average);
     bool isReady() const { return ready; }
     bool isRecording() const { return recording; }
     size_t fileSize() const;
@@ -42,7 +57,7 @@ private:
     bool appendPending(const char* data, size_t length);
     const char* previousPath() const;
     bool summarize(const char* filePath, uint32_t& sweeps, uint8_t& peakChannel,
-                   uint8_t& average);
+                   uint8_t& peakLevel, uint8_t& average, uint8_t* channelAvgs = nullptr);
     bool ready = false;
     bool recording = false;
     static constexpr size_t PENDING_CAPACITY = 4096;

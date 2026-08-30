@@ -5,6 +5,13 @@
 
 namespace DisplayUi {
 
+enum ToastType : uint8_t {
+    TOAST_INFO = 0,
+    TOAST_SUCCESS,
+    TOAST_WARN,
+    TOAST_ERROR
+};
+
 // All renderer colors live in one palette so a theme change remains
 // consistent across menus, graphs, status cards, and dynamic regions.
 struct ThemePalette {
@@ -23,6 +30,18 @@ struct ThemePalette {
 };
 
 const ThemePalette& palette();
+
+inline const char* confidenceBadge(uint8_t confidence) {
+    if (confidence >= 70) return "HIGH CONF";
+    if (confidence >= 35) return "GOOD";
+    return "LOW DATA";
+}
+
+inline uint16_t confidenceBadgeColor(uint8_t confidence) {
+    if (confidence >= 70) return palette().low;
+    if (confidence >= 35) return palette().accent;
+    return palette().high;
+}
 
 inline const char* compactBandName(AnalyzerBand band) {
     switch (band) {

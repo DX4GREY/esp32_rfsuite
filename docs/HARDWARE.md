@@ -55,6 +55,18 @@ Pins can be overridden with `SD_CS_PIN` and `SD_MISO_PIN` build flags.
 GPIO 3 is intentionally avoided because it is used by boot/JTAG-related board
 functions.
 
+The firmware detects warm resets caused by an upload or software restart. It
+then releases both TFT/SD chip selects, resets the HSPI peripheral, and sends
+160 idle clocks before letting the Arduino SD driver run its complete
+CMD0/CMD8/ACMD41 sequence. It retries at 4 MHz, 1 MHz, then 400 kHz.
+Controlled restart/deep-sleep paths also flush and quiesce the card before
+resetting the ESP.
+This lets a still-powered card leave an interrupted SPI command without an ESP
+power cycle. The Serial log prints `reset_reason`, retry round, clock, and MISO
+idle state for diagnosis. If MISO remains LOW through every attempt, check the
+SD CS/MISO wiring and the module's level shifter or add a pull-up (typically
+10 kOhm) from MISO to 3.3 V.
+
 ## CC1101 wiring
 
 The CC1101 shares SCK, MOSI, and MISO with the nRF24 radios. Its chip-select

@@ -99,10 +99,19 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
 - Dynamic graphs do not clear the full screen.
 - Short and long presses do not double-trigger on Spectrum and Events.
 - Status values fit their rows.
+- First boot shows all three onboarding pages and persists completion.
+- Main Menu → Data opens Sessions, Storage Health, and Event Log without selecting a radio band.
+- Toasts disappear without leaving stale pixels and actionable errors switch between summary/details.
+- Fixed and adaptive Spectrum scales preserve threshold, baseline, watch, cursor, and confidence markers.
+- Held navigation advances by 1, then 5, then 10 without generating a release action.
+- Session Compare handles missing/corrupt/current+previous states and renders the largest channel deltas.
 
 ### Power
 
 - Restart displays its transition screen and reboots.
+- In **DATA → Storage Health**, short `A` retries SD mounting. Holding `A`
+  benchmarks SD only: it auto-retries mounting first and must report
+  `SD NO MOUNT` instead of silently benchmarking LittleFS when SD is absent.
 - Shutdown stops radios and sleeps.
 - Short wake press returns to sleep.
 - Holding `A` for about 1.5 seconds boots without immediately opening a menu item.
@@ -129,7 +138,7 @@ Before tagging or distributing firmware:
 7. Record RAM and flash use.
 8. Review the diff for accidental credentials, generated files, or unsafe default changes.
 
-Pushing the `v2.0.0` semantic version tag runs
+Pushing a semantic version tag (e.g., `v2.1.0`) runs
 `.github/workflows/release.yml`. The tag must match both `VERSION` and
 `APP_VERSION`. The workflow publishes only the receive-only `analyzer` binary,
 its SHA-256 checksum, and automatically generated notes covering changes since

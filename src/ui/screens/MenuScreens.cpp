@@ -10,13 +10,18 @@ using namespace DisplayUi;
 
 namespace {
 constexpr const char* MAIN_LABELS[] = {
-    "2.4 GHz", "SUB-GHz", "SETTINGS", "SYS INFO", "LUA", "SD FILES", "POWER"
+    "2.4 GHz", "SUB-GHz", "SETTINGS", "SYS INFO", "LUA", "SD FILES", "DATA", "ANIMATION", "POWER"
 };
-constexpr uint8_t MAIN_ICONS[] = {6, 6, 9, 10, 9, 12, 11};
+constexpr uint8_t MAIN_ICONS[] = {6, 6, 9, 10, 9, 12, 5, 8, 11};
 constexpr const char* SUB_LABELS[] = {
     "ANALYZER", "SUB READ", "LIBRARY", "PRESETS", "PACKETS", "RF TEST"
 };
 constexpr uint8_t SUB_ICONS[] = {0, 5, 12, 8, 7, 6};
+
+int mainMenuCount() { return appState.animationsEnabled ? 9 : 8; }
+int mainFeatureIndex(int displayIndex) {
+    return (!appState.animationsEnabled && displayIndex >= 7) ? displayIndex + 1 : displayIndex;
+}
 }
 
 void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
@@ -111,6 +116,7 @@ void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
 }
 
 void DisplayManager::drawMainMenuItem(int featureIndex, int slot, bool selected) {
+    featureIndex = mainFeatureIndex(featureIndex);
     const bool list = appState.menuLayout == MENU_LAYOUT_LIST;
     const int visibleRow = slot - mainMenuScrollOffset;
     if (list && (visibleRow < 0 || visibleRow >= 4)) return;
@@ -137,14 +143,14 @@ void DisplayManager::renderBandSelector() {
     tft.setCursor(139, 3); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
     tft.print(page + 1); tft.print("/2");
     tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
-    const int count = page == 0 ? 6 : 1;
+    const int count = page == 0 ? 6 : mainMenuCount() - 6;
     const int firstSlot = appState.menuLayout == MENU_LAYOUT_LIST ? mainMenuScrollOffset : 0;
     const int lastSlot = appState.menuLayout == MENU_LAYOUT_LIST ? min(count, firstSlot + 4) : count;
     for (int slot = firstSlot; slot < lastSlot; ++slot) {
         const int feature = page * 6 + slot;
         drawMainMenuItem(feature, slot, feature == bandSelection);
     }
-    drawModernFooter("U/D MOVE", "B PAGE", "A OPEN");
+    drawModernFooter("U/D MOVE", "A OPEN", "B PAGE");
 }
 
 void DisplayManager::redrawMainMenuItems() {
@@ -152,19 +158,21 @@ void DisplayManager::redrawMainMenuItems() {
     if (appState.menuLayout == MENU_LAYOUT_LIST &&
         previousMainMenuScrollOffset != mainMenuScrollOffset) {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
-        const int count = page == 0 ? 6 : 1;
+        const int count = page == 0 ? 6 : mainMenuCount() - 6;
         for (int slot = mainMenuScrollOffset; slot < min(count, mainMenuScrollOffset + 4); ++slot)
             drawMainMenuItem(page * 6 + slot, slot, false);
-        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
+             menuTransitionPhase < 4; ++menuTransitionPhase) {
             drawMainMenuItem(bandSelection, bandSelection % 6, true);
-            delay(12); yield();
+            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
         }
         menuTransitionPhase = 3;
     } else {
         drawMainMenuItem(previousBandSelection, previousBandSelection % 6, false);
-        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
+             menuTransitionPhase < 4; ++menuTransitionPhase) {
             drawMainMenuItem(bandSelection, bandSelection % 6, true);
-            delay(12); yield();
+            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
         }
         menuTransitionPhase = 3;
     }
@@ -196,7 +204,7 @@ void DisplayManager::renderSubGhzScreen() {
     tft.setCursor(139, 3); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER); tft.print("1/1");
     tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
     for (int i = 0; i < 6; ++i) drawSubGhzMenuItem(i, i == subGhzMenuSelection);
-    drawModernFooter("U/D MOVE", "B MAIN", "A OPEN");
+    drawModernFooter("U/D MOVE", "A OPEN", "B MAIN");
 }
 
 void DisplayManager::renderSubGhzOfflinePopup() {
@@ -211,7 +219,7 @@ void DisplayManager::renderSubGhzOfflinePopup() {
     tft.setCursor(14, 58); tft.print("Use simulation?");
     tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
     tft.setCursor(14, 73); tft.print("NOT REAL RF DATA");
-    drawModernFooter("", "A SIMULATE", "B CANCEL");
+    drawModernFooter("", "A SIM", "B CANCEL");
 }
 
 void DisplayManager::redrawSubGhzMenuItems() {
@@ -220,16 +228,18 @@ void DisplayManager::redrawSubGhzMenuItems() {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         for (int i = subGhzMenuScrollOffset; i < min(6, subGhzMenuScrollOffset + 4); ++i)
             drawSubGhzMenuItem(i, false);
-        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
+             menuTransitionPhase < 4; ++menuTransitionPhase) {
             drawSubGhzMenuItem(subGhzMenuSelection, true);
-            delay(12); yield();
+            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
         }
         menuTransitionPhase = 3;
     } else {
         drawSubGhzMenuItem(previousSubGhzMenuSelection, false);
-        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
+             menuTransitionPhase < 4; ++menuTransitionPhase) {
             drawSubGhzMenuItem(subGhzMenuSelection, true);
-            delay(12); yield();
+            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
         }
         menuTransitionPhase = 3;
     }
@@ -237,7 +247,7 @@ void DisplayManager::redrawSubGhzMenuItems() {
 
 void DisplayManager::renderSubGhzAnalyzerScreen() {
     if (!subAnalyzerLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM RF ANALYZER" : "SUB-GHz ANALYZER", SPECTRUM_ACCENT);
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM ANALYZER" : "SUB ANALYZER", SPECTRUM_ACCENT);
         tft.fillRoundRect(4, 17, 152, 68, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(4, 17, 152, 68, 4, SPECTRUM_BORDER);
         // Two subtle reference lines make relative RSSI changes easier to read.
@@ -292,13 +302,13 @@ void DisplayManager::renderSubGhzAnalyzerScreen() {
 
 void DisplayManager::renderSubGhzPresetsScreen() {
     if (!subPresetLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM PRESETS" : "SUB-GHz PRESETS", SPECTRUM_HIGH);
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM PRESETS" : "SUB PRESETS", SPECTRUM_HIGH);
         tft.fillRoundRect(6, 21, 148, 68, 5, SPECTRUM_CARD_BG);
         tft.drawRoundRect(6, 21, 148, 68, 5, SPECTRUM_BORDER);
         tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
         tft.setCursor(12, 29); tft.print("MODULATION");
         tft.setCursor(12, 61); tft.print("TX REGION");
-        drawModernFooter("U/D PRE", "A REGION", "HOLD B REP");
+        drawModernFooter("U/D MOD", "A REGION", "B BACK");
         subPresetLayoutDrawn = true;
     }
     const int preset = static_cast<int>(cc1101Manager.preset());
@@ -328,7 +338,7 @@ void DisplayManager::renderSubGhzPresetsScreen() {
 
 void DisplayManager::renderSubGhzPacketScreen() {
     if (!subPacketLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM PACKETS" : "PACKET ANALYZER", SPECTRUM_ACCENT);
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM PACKETS" : "SUB PACKETS", SPECTRUM_ACCENT);
         tft.fillRoundRect(5, 18, 150, 77, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 18, 150, 77, 4, SPECTRUM_BORDER);
         tft.setCursor(10, 24); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("FREQ");
@@ -357,7 +367,7 @@ void DisplayManager::renderSubGhzPacketScreen() {
 
 void DisplayManager::renderSubGhzRecordScreen() {
     if (!subRecordLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM SUB READ" : "SUB-GHz READ", SPECTRUM_CRITICAL);
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM SUB READ" : "SUB READ", SPECTRUM_CRITICAL);
         tft.fillRoundRect(5, 17, 150, 21, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 21, 4, SPECTRUM_BORDER);
         tft.setCursor(10, 24); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("MHz");
@@ -386,7 +396,7 @@ void DisplayManager::renderSubGhzRecordScreen() {
         tft.setTextColor(recordingState ? SPECTRUM_CRITICAL : SPECTRUM_LOW,
                          recordingState ? DISPLAY_ACTIVE_BG : SPECTRUM_BORDER);
         tft.print(recordingState == 2 ? "ARMED" : (recordingState == 1 ? "REC" : "READY"));
-        drawModernFooter("U/D FREQ", subGhzRawService.isRecording() ? "A STOP" : "A READ", "B BACK");
+        drawModernFooter("U/D FREQ", subGhzRawService.isRecording() ? "A STOP" : "A REC", "B BACK");
         if (recordingState == 1) {
             tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
             tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
@@ -464,12 +474,11 @@ void DisplayManager::renderSubGhzRecordScreen() {
 }
 
 void DisplayManager::renderSubGhzEmulateScreen() {
-    drawModernHeader(subGhzDeleteArmed ? "DELETE? A YES / B NO" :
-                     (subGhzRawService.simulationMode() ? "SIM LIBRARY" : "SUB-GHz LIBRARY"), SPECTRUM_HIGH);
+    drawModernHeader(subGhzDeleteArmed ? "DELETE FILE?" :
+                     (subGhzRawService.simulationMode() ? "SIM LIBRARY" : "SUB LIBRARY"), SPECTRUM_HIGH);
     tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
     if (!subGhzFileCount) {
-        tft.setCursor(31, 48); tft.setTextColor(ST77XX_GRAY, ST77XX_BLACK);
-        tft.print("NO RAW RECORDINGS");
+        drawEmptyState("NO RECORDINGS", "Capture a signal first.", "", "B BACK");
     } else {
         for (size_t i = subGhzFileScrollOffset;
              i < min(subGhzFileCount, subGhzFileScrollOffset + 4); ++i)
@@ -491,7 +500,7 @@ void DisplayManager::renderSubGhzReplayAnimation() {
     lastSubGhzReplayFrameMs = now;
 
     if (firstFrame) {
-        drawModernHeader("SUB-GHz REPLAY", SPECTRUM_CRITICAL);
+        drawModernHeader("SUB REPLAY", SPECTRUM_CRITICAL);
         tft.fillRoundRect(4, 17, 152, 86, 5, SPECTRUM_CARD_BG);
         tft.drawRoundRect(4, 17, 152, 86, 5, SPECTRUM_BORDER);
 
@@ -506,7 +515,8 @@ void DisplayManager::renderSubGhzReplayAnimation() {
     // Flipper-inspired replay page: compact transmitter, animated waves, and
     // real progress rather than an indeterminate activity screen.
     tft.fillRect(9, 32, 142, 53, SPECTRUM_CARD_BG);
-    const int phase = subGhzReplayFrame % 4;
+    const bool animateActivity = appState.animationsEnabled && appState.activityAnimationEnabled;
+    const int phase = animateActivity ? subGhzReplayFrame % 4 : 0;
     const uint16_t waveColors[4] = {
         SPECTRUM_CRITICAL, SPECTRUM_HIGH, SPECTRUM_MID, SPECTRUM_BORDER
     };
@@ -567,12 +577,12 @@ void DisplayManager::renderSubGhzReplayAnimation() {
     tft.setCursor(136, 23);
     tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
     tft.print(spinner[phase]);
-    ++subGhzReplayFrame;
+    if (animateActivity) ++subGhzReplayFrame;
 }
 
 void DisplayManager::renderSubGhzReplayResult() {
     const uint16_t accent = subGhzReplaySucceeded ? SPECTRUM_LOW : SPECTRUM_CRITICAL;
-    drawModernHeader(subGhzReplaySucceeded ? "REPLAY COMPLETE" : "REPLAY STOPPED", accent);
+    drawModernHeader(subGhzReplaySucceeded ? "REPLAY DONE" : "REPLAY FAIL", accent);
     tft.fillRoundRect(5, 18, 150, 84, 5, SPECTRUM_CARD_BG);
     tft.drawRoundRect(5, 18, 150, 84, 5, accent);
 
@@ -645,7 +655,7 @@ void DisplayManager::redrawSubGhzFileItems() {
 
 void DisplayManager::renderSubGhzRfTestScreen() {
     if (!subRfTestLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM: RF TEST OFF" : "CC1101 RF TEST", SPECTRUM_CRITICAL);
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM RF TEST" : "SUB RF TEST", SPECTRUM_CRITICAL);
         tft.fillRoundRect(8, 24, 144, 65, 5, SPECTRUM_CARD_BG);
         tft.drawRoundRect(8, 24, 144, 65, 5, SPECTRUM_BORDER);
 #if !RF_LAB_TX_ENABLED
@@ -822,16 +832,18 @@ void DisplayManager::redrawMenuItems(int oldSel, int newSel) {
         const int count = MenuCatalog::pageItemCount(menuPage);
         for (int i = menuScrollOffset; i < min(count, menuScrollOffset + 4); ++i)
             drawMenuItem(i, false);
-        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
+             menuTransitionPhase < 4; ++menuTransitionPhase) {
             drawMenuItem(menuSelection, true);
-            delay(12); yield();
+            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
         }
         menuTransitionPhase = 3;
     } else if (oldSel != newSel) {
         drawMenuItem(oldSel, false);
-        for (menuTransitionPhase = 0; menuTransitionPhase < 4; ++menuTransitionPhase) {
+        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
+             menuTransitionPhase < 4; ++menuTransitionPhase) {
             drawMenuItem(newSel, true);
-            delay(12); yield();
+            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
         }
         menuTransitionPhase = 3;
     }
@@ -861,7 +873,7 @@ void DisplayManager::renderMainMenu() {
         drawMenuItem(i, i == menuSelection);
     }
 
-    drawModernFooter("U/D MOVE", "B PAGE", "A OPEN");
+    drawModernFooter("U/D MOVE", "A OPEN", "B PAGE");
 }
 
 // =============================================================================
@@ -892,13 +904,13 @@ void DisplayManager::renderJammerScreen() {
         return;
     }
     if (!jammerLayoutDrawn) {
-        drawModernHeader("AUTHORIZED RF TEST", SPECTRUM_HIGH);
+        drawModernHeader("AUTH RF TEST", SPECTRUM_HIGH);
         tft.fillRoundRect(5, 17, 150, 34, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 34, 4, SPECTRUM_BORDER);
         tft.fillRoundRect(5, 54, 150, 34, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 54, 150, 34, 4, SPECTRUM_BORDER);
         tft.fillRoundRect(5, 92, 150, 11, 3, SPECTRUM_CARD_BG);
-        drawModernFooter("U/D TGT", "A START", "B STOP");
+        drawModernFooter("U/D TGT", "A START", "B BACK");
         jammerLayoutDrawn = true;
     }
 

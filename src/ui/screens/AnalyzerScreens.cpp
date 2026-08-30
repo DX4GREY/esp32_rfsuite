@@ -7,22 +7,8 @@
 using namespace DisplayUi;
 
 void DisplayManager::drawSpectrumGrid() {
-    // Compact status header with a small signal glyph and band badge.
-    tft.fillRect(0, 0, 160, 14, SPECTRUM_HEADER_BG);
-    tft.drawFastHLine(0, 13, 160, SPECTRUM_ACCENT);
-    tft.drawFastVLine(4, 8, 3, SPECTRUM_ACCENT);
-    tft.drawFastVLine(7, 6, 5, SPECTRUM_ACCENT);
-    tft.drawFastVLine(10, 3, 8, SPECTRUM_ACCENT);
-    tft.setCursor(15, 3);
-    tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
-    tft.print(appState.simulationMode ? "SIM SPECTRUM" : "SPECTRUM");
-
-    tft.fillRoundRect(66, 2, 31, 10, 3, SPECTRUM_BORDER);
-    const char* band = compactBandName(appState.analyzerBand);
-    int bandX = 66 + (31 - static_cast<int>(strlen(band)) * 6) / 2;
-    tft.setCursor(bandX, 3);
-    tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
-    tft.print(band);
+    // Compact status header with status indicators
+    drawModernHeader(appState.simulationMode ? "SIM SPECTRUM" : "SPECTRUM", SPECTRUM_ACCENT);
 
     // Chart card and dotted horizontal guides.
     tft.fillRect(16, 15, 130, 67, SPECTRUM_CARD_BG);
@@ -36,7 +22,7 @@ void DisplayManager::drawSpectrumGrid() {
     // Minimal Y-axis labels leave more room for the actual signal plot.
     tft.setTextColor(ST77XX_GRAY, ST77XX_BLACK);
     tft.setCursor(0, GRAPH_Y_TOP - 2);
-    tft.print("100");
+    tft.print(appState.analyzerAutoScale ? "AUT" : "100");
     tft.setCursor(3, GRAPH_Y_TOP + (GRAPH_HEIGHT / 2) - 3);
     tft.print("50");
     tft.setCursor(9, GRAPH_Y_BASELINE - 5);
@@ -53,21 +39,23 @@ void DisplayManager::drawSpectrumGrid() {
     tft.setCursor(17, 84);
     tft.setTextColor(SPECTRUM_ACCENT, ST77XX_BLACK);
     tft.print(2400 + visibleMin);
-    tft.setCursor(111, 84);
-    tft.print(2400 + visibleMax);
-    tft.setCursor(58, 84);
+    tft.setCursor(56, 84);
     tft.setTextColor(ST77XX_GRAY, ST77XX_BLACK);
     tft.print(appState.getAnalyzerTraceModeName());
     tft.print(" x");
     tft.print(appState.analyzerZoom);
 
-    tft.fillRect(0, 105, 160, 23, ST77XX_BLACK);
-    drawFooterChip(2, 37, appState.analyzerFrozen ? "U CH+" : "U BAND");
-    String modeChip = "D ";
-    modeChip += appState.analyzerFrozen ? "CH-" : appState.getAnalyzerRadioModeName();
-    drawFooterChip(41, 37, modeChip.c_str());
-    drawFooterChip(80, 37, appState.analyzerFrozen ? "A LIVE" : "A HOLD");
-    drawFooterChip(119, 39, "B BACK");
+    // Data Quality Badge (Requirement 7)
+    tft.setCursor(92, 84);
+    tft.setTextColor(confidenceBadgeColor(appState.analyzerConfidence), ST77XX_BLACK);
+    tft.print(confidenceBadge(appState.analyzerConfidence));
+
+    // Dynamic Contextual Footer (Requirement 5)
+    if (appState.analyzerFrozen) {
+        drawModernFooter("U/D CUR", "A LIVE", "B BACK");
+    } else {
+        drawModernFooter("U/D BND", "A FREEZE", "B BACK");
+    }
 }
 
 void DisplayManager::drawSpectrumBars() {
@@ -116,6 +104,7 @@ void DisplayManager::drawSpectrumBars() {
     }
 
     tft.startWrite();
+    const uint8_t maxScale = appState.analyzerAutoScale ? max<uint8_t>(25, appState.peakLevel) : 100;
     for (int pixel = 0; pixel < GRAPH_WIDTH; pixel++) {
         const int ch = visibleMin + (pixel * visibleSpan) / (GRAPH_WIDTH - 1);
         uint8_t lvl = appState.getTraceLevel(ch);
@@ -126,8 +115,8 @@ void DisplayManager::drawSpectrumBars() {
 
         int x = GRAPH_X_START + pixel;
 
-        int barHeight = (lvl * GRAPH_HEIGHT) / 100;
-        int peakHeight = (peak * GRAPH_HEIGHT) / 100;
+        int barHeight = (lvl * GRAPH_HEIGHT) / maxScale;
+        int peakHeight = (peak * GRAPH_HEIGHT) / maxScale;
 
         int peakTop = GRAPH_Y_BASELINE - peakHeight;
 
@@ -138,6 +127,22 @@ void DisplayManager::drawSpectrumBars() {
             tft.writePixel(x, GRAPH_Y_TOP + (GRAPH_HEIGHT / 2), SPECTRUM_GRID);
         }
         tft.writePixel(x, GRAPH_Y_BASELINE, SPECTRUM_BORDER);
+
+        // Threshold event guideline marker (Requirement 8)
+        if (appState.eventThreshold > 0 && appState.eventThreshold <= 100) {
+            const int thrY = GRAPH_Y_BASELINE - (appState.eventThreshold * GRAPH_HEIGHT) / maxScale;
+            if (thrY >= GRAPH_Y_TOP && thrY <= GRAPH_Y_BASELINE && (pixel % 6) == 0) {
+                tft.writePixel(x, thrY, SPECTRUM_HIGH);
+            }
+        }
+
+        // Baseline guideline marker (Requirement 8)
+        if (appState.baselineValid && appState.baselineLevels[ch] > 0) {
+            const int baseTop = GRAPH_Y_BASELINE - (appState.baselineLevels[ch] * GRAPH_HEIGHT) / maxScale;
+            if (baseTop >= GRAPH_Y_TOP && baseTop <= GRAPH_Y_BASELINE) {
+                tft.writePixel(x, baseTop, SPECTRUM_ACCENT);
+            }
+        }
 
         if (barHeight > 0) {
             // A four-zone vertical gradient makes intensity readable without
@@ -200,6 +205,7 @@ void DisplayManager::drawSpectrumBars() {
     if(wifi>0){tft.print("W");tft.print(wifi);}
     if(regions&4)tft.print("B");
     if(regions&8)tft.print("Z");
+    tft.print(" [NOT dBm]");
 }
 
 void DisplayManager::renderSpectrumAnalyzer() {
@@ -231,7 +237,7 @@ void DisplayManager::renderWaterfallScreen() {
         tft.print("NEW");
         tft.setCursor(1, 82);
         tft.print("OLD");
-        drawModernFooter("U BAND", "A CLEAR", "B BACK");
+        drawModernFooter("U/D BND", "A CLEAR", "B BACK");
         needRedraw = false;
     }
 
@@ -250,10 +256,10 @@ void DisplayManager::renderWaterfallScreen() {
 
 void DisplayManager::renderSurveyScreen() {
     if (needRedraw) {
-        drawModernHeader("CHANNEL SURVEY", SPECTRUM_LOW);
+        drawModernHeader("CH SURVEY", SPECTRUM_LOW);
         tft.fillRoundRect(5, 17, 150, 86, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
-        drawModernFooter("", "A RESET", "B BACK");
+        drawModernFooter("U/D BND", "A RESET", "B BACK");
         needRedraw = false;
     }
 
@@ -308,7 +314,7 @@ void DisplayManager::renderEventsScreen() {
         drawModernHeader("RF EVENTS", SPECTRUM_HIGH);
         tft.fillRoundRect(5, 17, 150, 86, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
-        drawModernFooter("U T/D H", "A CLEAR", "B BACK");
+        drawModernFooter("U/D THR", "A CLEAR", "B BACK");
         needRedraw = false;
     }
 
@@ -355,7 +361,7 @@ void DisplayManager::renderEventsScreen() {
 }
 
 void DisplayManager::renderLoggingScreen() {
-    drawModernHeader("SERIAL LOGGING", appState.loggingEnabled ?
+    drawModernHeader("LOGGING", appState.loggingEnabled ?
                      SPECTRUM_CRITICAL : SPECTRUM_ACCENT);
     tft.fillRoundRect(12, 22, 136, 76, 7, SPECTRUM_CARD_BG);
     tft.drawRoundRect(12, 22, 136, 76, 7, SPECTRUM_BORDER);
@@ -367,7 +373,9 @@ void DisplayManager::renderLoggingScreen() {
     tft.print(appState.loggingEnabled ? "RECORDING" : "STOPPED");
     tft.setCursor(34, 74);
     tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
-    tft.print("USB + LITTLEFS CSV");
+    tft.print("USB + ");
+    tft.print(sessionRecorder.storageName());
+    tft.print(" CSV");
     tft.setCursor(32, 86);
     tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
     if (sessionRecorder.isReady()) {
@@ -383,7 +391,7 @@ void DisplayManager::renderLoggingScreen() {
 }
 
 void DisplayManager::renderRadioDiagScreen() {
-    drawModernHeader("RADIO DIAGNOSTICS", SPECTRUM_ACCENT);
+    drawModernHeader("RADIO DIAG", SPECTRUM_ACCENT);
     const bool ok1 = radioManager.isRadio1Connected();
     const bool ok2 = radioManager.isRadio2Connected();
     for (int radioIndex = 0; radioIndex < 2; radioIndex++) {
@@ -400,12 +408,12 @@ void DisplayManager::renderRadioDiagScreen() {
         tft.setTextColor(ok ? SPECTRUM_LOW : SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
         tft.print(ok ? "CONNECTED" : "NOT DETECTED");
     }
-    drawModernFooter("", "A REFRESH", "B BACK");
+    drawModernFooter("", "A SCAN", "B BACK");
     needRedraw = false;
 }
 
 void DisplayManager::renderProfilesScreen() {
-    drawModernHeader("SCAN PROFILES", SPECTRUM_ACCENT);
+    drawModernHeader("PROFILES", SPECTRUM_ACCENT);
     const char* names[4] = {"FAST", "BALANCED", "DEEP", "CUSTOM"};
     const int samples[4] = {
         12,
@@ -428,7 +436,7 @@ void DisplayManager::renderProfilesScreen() {
         tft.print(samples[profile]);
         tft.print(" smp");
     }
-    drawModernFooter("U/D SET", "A VALUE", "B BACK");
+    drawModernFooter("U/D SEL", "A SAMPLE", "B BACK");
     needRedraw = false;
 }
 
@@ -440,7 +448,7 @@ void DisplayManager::renderChannelInspector() {
     // STATIC part: drawn only once (when entering the mode / changing channel)
     // ---------------------------------------------------------------
     if (needRedraw) {
-        drawModernHeader("CHANNEL INSPECT", SPECTRUM_ACCENT);
+        drawModernHeader("CH INSPECT", SPECTRUM_ACCENT);
         tft.fillRoundRect(5, 17, 150, 27, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 27, 4, SPECTRUM_BORDER);
         tft.fillRoundRect(5, 47, 150, 48, 4, SPECTRUM_CARD_BG);
@@ -496,9 +504,7 @@ void DisplayManager::renderChannelInspector() {
     // ---------------------------------------------------------------
     // DYNAMIC part: per-frame update without a full-screen clear (anti-flicker)
     // ---------------------------------------------------------------
-    // Clear the gauge area (incl. border), then redraw border + fill
     if (valuesChanged) {
-        // Keep the static border intact; update only its interior.
         tft.fillRect(12, 64, 136, 9, SPECTRUM_CARD_BG);
 
         int barW = map(appState.inspectedLevel, 0, 100, 0, 136);
@@ -533,14 +539,166 @@ void DisplayManager::renderChannelInspector() {
         tft.setTextColor(carrierDetected ? SPECTRUM_CRITICAL : SPECTRUM_LOW,
                          SPECTRUM_CARD_BG);
         tft.print(carrierDetected ? "> RF ACTIVITY" : "> CHANNEL CLEAR");
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print(" [NOT dBm]");
         previousCarrierDetected = carrierDetected;
         carrierStatusValid = true;
     }
 }
 
 // =============================================================================
-// RENDER STATUS SCREEN (COMPACT & FIT)
+// SESSION MANAGER SCREEN (Requirement 12)
 // =============================================================================
+void DisplayManager::renderDataMenuScreen() {
+    drawModernHeader("DATA", SPECTRUM_ACCENT);
+    const char* labels[3] = {"SESSIONS", "STORAGE HEALTH", "EVENT LOG"};
+    const char* details[3] = {"record / compare / export", "SD + LittleFS status", "persistent diagnostics"};
+    for (uint8_t item = 0; item < 3; ++item) {
+        const int y = 19 + item * 27;
+        const bool selected = item == dataMenuSelection;
+        const uint16_t background = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
+        tft.fillRoundRect(7, y, 146, 22, 4, background);
+        tft.drawRoundRect(7, y, 146, 22, 4, selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER);
+        tft.setCursor(13, y + 4); tft.setTextColor(selected ? SPECTRUM_ACCENT : ST77XX_WHITE, background); tft.print(labels[item]);
+        tft.setCursor(13, y + 13); tft.setTextColor(ST77XX_GRAY, background); tft.print(details[item]);
+    }
+    drawModernFooter("U/D SEL", "A OPEN", "B BACK");
+}
+
+void DisplayManager::renderSessionManagerScreen() {
+    drawModernHeader("SESSIONS", SPECTRUM_ACCENT);
+
+    tft.fillRoundRect(4, 16, 152, 88, 4, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(4, 16, 152, 88, 4, SPECTRUM_BORDER);
+
+    const bool isRec = sessionRecorder.isRecording();
+    const bool hasCur = sessionRecorder.hasCurrentSession();
+    const bool hasPrev = sessionRecorder.hasPreviousSession();
+
+    const char* options[6] = {
+        isRec ? "RECORD: [ACTIVE]" : "RECORD: [STOPPED]",
+        "CURRENT SESSION",
+        "PREVIOUS SESSION",
+        "COMPARE SESSIONS",
+        "EXPORT CSV",
+        "DELETE CURRENT"
+    };
+
+    uint32_t sweeps = 0;
+    uint8_t peakCh = 0, peakLvl = 0, avg = 0;
+    if (hasCur) {
+        sessionRecorder.summarizeCurrent(sweeps, peakCh, peakLvl, avg);
+    }
+
+    for (int i = 0; i < 6; ++i) {
+        const int y = 18 + i * 14;
+        const bool isSelected = (i == sessionManagerSelection);
+        const uint16_t rowBg = isSelected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
+
+        tft.fillRect(6, y, 148, 13, rowBg);
+        if (isSelected) {
+            tft.drawRoundRect(6, y, 148, 13, 2, SPECTRUM_ACCENT);
+        }
+
+        tft.setCursor(10, y + 3);
+        uint16_t textColor = isSelected ? ST77XX_WHITE : ST77XX_GRAY;
+        if (i == 0) textColor = isRec ? SPECTRUM_CRITICAL : SPECTRUM_LOW;
+        else if (i == 5) textColor = SPECTRUM_CRITICAL;
+        else if (i == 3) textColor = SPECTRUM_ACCENT;
+
+        tft.setTextColor(textColor, rowBg);
+        tft.print(options[i]);
+
+        // Right side info
+        tft.setCursor(108, y + 3);
+        if (i == 0 && isRec) {
+            tft.setTextColor(SPECTRUM_CRITICAL, rowBg);
+            tft.print("REC");
+        } else if (i == 1 && hasCur) {
+            tft.setTextColor(SPECTRUM_ACCENT, rowBg);
+            tft.printf("%lu swp", sweeps);
+        } else if (i == 2 && hasPrev) {
+            tft.setTextColor(SPECTRUM_LOW, rowBg);
+            tft.print("SAVED");
+        }
+    }
+
+    drawModernFooter("U/D SEL", "A SELECT", "B BACK");
+    needRedraw = false;
+}
+
 // =============================================================================
-// Settings rendering lives in SystemScreens.cpp.
+// SESSION COMPARE SCREEN (Requirement 6)
 // =============================================================================
+void DisplayManager::renderSessionCompareScreen() {
+    if (!sessionRecorder.hasCurrentSession() || !sessionRecorder.hasPreviousSession()) {
+        drawModernHeader("COMPARE", SPECTRUM_ACCENT);
+        drawEmptyState("NO PREV SESSION", "Record two sessions\nto compare results.", "A RECORD", "B BACK");
+        needRedraw = false;
+        return;
+    }
+
+    SessionComparison comp;
+    if (!sessionRecorder.compareWithPrevious(comp)) {
+        drawModernHeader("COMPARE", SPECTRUM_ACCENT);
+        drawEmptyState("COMPARE FAILED", "Session files invalid.", "A RETRY", "B BACK");
+        needRedraw = false;
+        return;
+    }
+
+    drawModernHeader("COMPARE", SPECTRUM_ACCENT);
+
+    // Summary Card
+    tft.fillRoundRect(4, 16, 152, 42, 4, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(4, 16, 152, 42, 4, SPECTRUM_BORDER);
+
+    // Delta line
+    tft.setCursor(8, 20);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("ENV CHANGE: ");
+    uint16_t deltaColor = comp.averageDelta > 0 ? SPECTRUM_CRITICAL : (comp.averageDelta < 0 ? SPECTRUM_LOW : ST77XX_WHITE);
+    tft.setTextColor(deltaColor, SPECTRUM_CARD_BG);
+    tft.printf("%+d%%", comp.averageDelta);
+
+    // Mini comparative bars on top right
+    tft.fillRoundRect(106, 20, 44, 6, 1, DISPLAY_BAR_TRACK);
+    tft.fillRoundRect(106, 20, map(comp.previousAverage, 0, 100, 0, 44), 6, 1, SPECTRUM_ACCENT);
+    tft.fillRoundRect(106, 28, 44, 6, 1, DISPLAY_BAR_TRACK);
+    tft.fillRoundRect(106, 28, map(comp.currentAverage, 0, 100, 0, 44), 6, 1, SPECTRUM_HIGH);
+
+    // PREV stats
+    tft.setCursor(8, 32);
+    tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+    tft.printf("PREV %2u%% CH%2u", comp.previousAverage, comp.previousPeakChannel);
+
+    // NOW stats
+    tft.setCursor(8, 44);
+    tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+    tft.printf("NOW  %2u%% CH%2u", comp.currentAverage, comp.currentPeakChannel);
+
+    // Top Deltas Card
+    tft.fillRoundRect(4, 60, 152, 44, 4, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(4, 60, 152, 44, 4, SPECTRUM_BORDER);
+
+    for (int i = 0; i < 4; ++i) {
+        const int y = 63 + i * 10;
+        const auto& d = comp.topDeltas[i];
+        tft.setCursor(8, y);
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.printf("CH%-2u ", d.channel);
+
+        uint16_t dColor = d.delta > 0 ? SPECTRUM_CRITICAL : (d.delta < 0 ? SPECTRUM_LOW : ST77XX_GRAY);
+        tft.setTextColor(dColor, SPECTRUM_CARD_BG);
+        tft.printf("%+3d%%", d.delta);
+
+        // Delta mini bar
+        const int barW = map(abs(d.delta), 0, 100, 0, 50);
+        tft.fillRect(66, y + 2, 50, 5, DISPLAY_BAR_TRACK);
+        if (barW > 0) {
+            tft.fillRect(66, y + 2, barW, 5, dColor);
+        }
+    }
+
+    drawModernFooter("A RECORD", "", "B BACK");
+    needRedraw = false;
+}

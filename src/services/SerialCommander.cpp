@@ -231,6 +231,8 @@ void SerialCommander::executeCommand(String cmd) {
         sessionRecorder.stop();
         appState.factoryResetSettings();
         Serial.println("Factory settings restored. Rebooting...");
+        storageManager.prepareForRestart();
+        Serial.flush();
         delay(100);
         ESP.restart();
     }

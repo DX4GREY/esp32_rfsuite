@@ -2,6 +2,17 @@
 
 AppState appState;
 
+const char* AppState::getAnimationSpeedName() const {
+    static const char* names[] = {"SLOW", "NORMAL", "FAST"};
+    return names[constrain(animationSpeed, static_cast<uint8_t>(0), static_cast<uint8_t>(2))];
+}
+
+uint16_t AppState::scaledAnimationDelay(uint16_t normalMs) const {
+    if (animationSpeed == 0) return normalMs + normalMs / 2;
+    if (animationSpeed == 2) return max<uint16_t>(1, normalMs * 2 / 3);
+    return normalMs;
+}
+
 void AppState::setJammerTarget(JammerTarget target) {
     jammerTarget = target;
     switch (jammerTarget) {

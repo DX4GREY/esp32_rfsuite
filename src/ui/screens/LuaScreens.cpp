@@ -50,7 +50,7 @@ void DisplayManager::renderLuaScriptsScreen() {
                              ST77XX_BLACK);
             tft.print(rows[i]);
         }
-        drawModernFooter("B LIST", "U/D SCR", "A RERUN");
+        drawModernFooter("U/D SCR", "A RERUN", "B LIST");
         return;
     }
     if (!luaScriptCount && luaRunStatus.length() == 0) {
@@ -93,7 +93,7 @@ void DisplayManager::renderLuaScriptsScreen() {
                          ST77XX_BLACK);
         tft.setCursor(4, 94); tft.print(status);
     }
-    drawModernFooter("B BACK", "UP/DN", "A RUN");
+    drawModernFooter("U/D SEL", "A RUN", "B BACK");
 }
 
 void DisplayManager::loadFileExplorerDirectory() {
@@ -156,7 +156,7 @@ void DisplayManager::loadFileExplorerDirectory() {
 
 void DisplayManager::renderFileExplorerScreen() {
     if (!fileEntryCount && fileStatus.length() == 0) loadFileExplorerDirectory();
-    drawModernHeader("SD FILE EXPLORER", SPECTRUM_ACCENT);
+    drawModernHeader("FILE EXPLORER", SPECTRUM_ACCENT);
     tft.fillRect(0, 15, 160, 90, ST77XX_BLACK);
     tft.setTextSize(1);
     String shownPath = String("SD:") + filePath;
@@ -166,13 +166,10 @@ void DisplayManager::renderFileExplorerScreen() {
     tft.print(shownPath);
 
     if (!storageManager.usingSd()) {
-        tft.setCursor(17, 48);
-        tft.setTextColor(SPECTRUM_CRITICAL, ST77XX_BLACK);
-        tft.print("SD CARD NOT READY");
+        drawEmptyState("SD NOT READY", "Recorder uses LittleFS.", "", "B BACK");
     } else if (!fileEntryCount) {
-        tft.setCursor(35, 48);
-        tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-        tft.print(fileStatus.length() ? fileStatus : "EMPTY FOLDER");
+        drawEmptyState(fileStatus.length() ? fileStatus.c_str() : "EMPTY FOLDER",
+                       "Copy files to the SD card.", "", "B BACK");
     } else {
         const int first = max(0, static_cast<int>(fileSelection) - 2);
         for (int row = 0; row < 5 && first + row < static_cast<int>(fileEntryCount); ++row) {
@@ -195,7 +192,7 @@ void DisplayManager::renderFileExplorerScreen() {
         tft.setCursor(5, 95); tft.setTextColor(SPECTRUM_LOW, ST77XX_BLACK);
         tft.print(fileStatus);
     }
-    drawModernFooter("B UP/BACK", "UP/DN", "A OPEN");
+    drawModernFooter("U/D SEL", "A OPEN", "B BACK");
 }
 
 namespace {
@@ -259,7 +256,7 @@ void DisplayManager::renderVideoPlayer() {
         drawModernHeader("SD VIDEO", SPECTRUM_ACCENT);
         tft.fillRect(3, 16, 154, 88, ST77XX_BLACK);
         tft.drawRect(2, 15, 156, 90, SPECTRUM_BORDER);
-        drawModernFooter("B BACK", "", "A +10S");
+        drawModernFooter("", "A +10S", "B BACK");
         videoLayoutDrawn = true;
     }
     const uint32_t now = millis();
@@ -336,7 +333,7 @@ void DisplayManager::renderPhotoViewer() {
     drawModernHeader("SD PHOTO", SPECTRUM_ACCENT);
     tft.fillRect(3, 16, 154, 88, ST77XX_BLACK);
     tft.drawRect(2, 15, 156, 90, SPECTRUM_BORDER);
-    drawModernFooter("B CLOSE", "D PREV", "U NEXT");
+    drawModernFooter("U/D PHOTO", "", "B BACK");
     if (!photoFile.seek(8)) { closePhoto(); return; }
 
     const int x = 4 + (152 - photoWidth) / 2;

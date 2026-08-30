@@ -1,15 +1,14 @@
-# RF Suite v2.0 — ESP32-S3 2.4 GHz and Sub-GHz Toolkit
+# RF Suite v2.1 — ESP32-S3 2.4 GHz and Sub-GHz Toolkit
 
 <p align="center">
-  <img src="images/banner.svg" alt="RF Suite v2.0 - ESP32-S3 2.4 GHz and Sub-GHz Toolkit">
+  <img src="images/banner.svg" alt="RF Suite v2.1 - ESP32-S3 2.4 GHz and Sub-GHz Toolkit">
 </p>
 
 A standalone dual-band firmware project for an ESP32-S3, one or two nRF24L01+
 modules, an optional CC1101 Sub-GHz transceiver, microSD storage, and a 1.8-inch
-ST7735 TFT. Version 2.0 adds a band selector, CC1101 frequency analysis, raw
-recording with a live waveform, `.rfr`/Flipper `.sub` library support, packet
-analysis, global hardware-missing simulation, and application-wide dirty-region
-rendering. The default build remains receive-only; active RF testing is isolated
+ST7735 TFT. Version 2.1 introduces a standardized 3-chip UI/UX, header safety boundaries,
+font rendering fixes, robust persistence validation, and expanded native testing.
+The default build remains receive-only; active RF testing is isolated
 in a separate controlled-lab build profile.
 
 The interface is designed for a 160 × 128 landscape display. It uses partial/dirty rendering: the complete screen is cleared only during page transitions, while graphs, status values, and menu cards are redrawn only where their content changes. This reduces flicker and keeps the UI responsive.
@@ -119,6 +118,11 @@ the display. Override `SD_CS_PIN` and `SD_MISO_PIN` in `build_flags` if your
 board uses different wiring. GPIO 3 is intentionally avoided because it is
 used by boot/JTAG-related board functions. Use a FAT16/FAT32-formatted card.
 
+After an upload/software reset the card remains powered, so firmware performs
+an SD SPI bus recovery and extended mount retry automatically. Mount attempts
+and MISO state are reported on Serial at 115200 baud. A manual retry is also
+available from **DATA -> Storage Health** with a short `A` press.
+
 The firmware initializes the display with `INITR_BLACKTAB` and rotation `3`. If colors, offsets, or orientation are incorrect, check the panel variant in `DisplayManager::init()`.
 
 ### Navigation buttons
@@ -179,14 +183,14 @@ default_envs = analyzer
 ## Versioning and releases
 
 The current firmware version is stored in `VERSION` and exposed in the device's
-**System Status → Radio / SW** page. The current release is `v2.0.0`.
+**System Status → Radio / SW** page. The current release is `v2.1.0`.
 
 To publish a release, first update `VERSION` and `APP_VERSION` to the same
 semantic version, commit the change, then push its matching tag:
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
+git tag v2.1.0
+git push origin v2.1.0
 ```
 
 The release workflow validates the tag, runs native tests, builds the safe
@@ -219,9 +223,16 @@ PlatformIO installs these dependencies automatically:
 ## User interface
 
 After the splash screen, the Main Menu selects 2.4 GHz, Sub-GHz, Settings,
-System Info, Lua, SD Files, or Power. The 2.4 GHz catalog retains its paged
+System Info, Lua, SD Files, Data, or Power. Data is a band-independent hub for
+session management/comparison, storage health, and the persistent event log.
+The 2.4 GHz catalog retains its paged
 feature menu. Choose the `GRID` or `LIST` layout in Settings; the choice applies
 to the global, 2.4 GHz, and Sub-GHz menus.
+
+The first boot includes a three-page guide covering measurement limitations,
+the four-button controls, and RX/SIM/lab states. Headers provide breadcrumbs
+and compact radio/storage/recording/mode indicators. Actions use typed toast
+messages and storage failures provide an actionable detail dialog.
 
 For CC1101 analyzer/record screens, modulation presets, TX-region policy, raw
 file format, replay progress controls, and remote compatibility, see the
@@ -234,6 +245,19 @@ file format, replay progress controls, and remote compatibility, see the
 | `B` | Advance to the next menu page |
 | `UP` at the first item | Move to the previous page and select its last item |
 | `DOWN` at the last item | Move to the next page and select its first item |
+
+### Data hub
+
+| Feature | Purpose |
+|---|---|
+| Sessions | Start/stop, inspect current/previous, compare, export, or delete the current session |
+| Storage Health | Show active backend/free space, retry SD, or hold `A` for a write/read benchmark |
+| Event Log | Browse persistent diagnostics; hold `A` to export or hold `B` to clear |
+
+Spectrum includes confidence badges, threshold/baseline markers, contextual
+controls, watched-channel emphasis, and selectable fixed `0–100` or adaptive
+graph scaling under Settings → Graph Scale. Held navigation accelerates from
+single steps to 5× and 10× on supported channel/value/list controls.
 
 ### Page 1 — Analyze
 

@@ -1,7 +1,10 @@
 #include "ui/DisplayManager.h"
 #include "ui/DisplaySupport.h"
 #include "drivers/DisplayStorageBus.h"
+#include "drivers/RadioManager.h"
 #include "services/SubGhzRawService.h"
+#include "services/StorageManager.h"
+#include "services/SessionRecorder.h"
 
 using namespace DisplayUi;
 
@@ -75,6 +78,7 @@ void DisplayManager::resetDynamicCaches() {
     previousSettingsTheme = -1;
     previousSettingsSniffSave = -1;
     previousSettingsOrientation = -1;
+    previousSettingsAnimation = -1;
     previousPowerSelection = -1;
     previousSubPreset = previousSubRegion = previousSubRepeats = -1;
     previousSubTrigger = 999;
@@ -141,7 +145,7 @@ void DisplayManager::luaGuiBegin(const char* title) {
     drawModernHeader(title && title[0] ? title : "LUA GUI", SPECTRUM_ACCENT);
     tft.fillRect(3, 16, 154, 88, ST77XX_BLACK);
     tft.drawRect(2, 15, 156, 90, SPECTRUM_BORDER);
-    drawModernFooter("B LIST", "", "A RERUN");
+    drawModernFooter("", "A RERUN", "B LIST");
 }
 
 void DisplayManager::luaGuiClose() {
@@ -224,7 +228,9 @@ void DisplayManager::showSplash() {
 
     static const int8_t sweepX[12] = {0, 6, 10, 12, 10, 6, 0, -6, -10, -12, -10, -6};
     static const int8_t sweepY[12] = {-12, -10, -6, 0, 6, 10, 12, 10, 6, 0, -6, -10};
-    for (uint8_t frame = 0; frame < 28; ++frame) {
+    const bool animateSplash = appState.animationsEnabled && appState.bootAnimationEnabled;
+    const uint8_t firstFrame = animateSplash ? 0 : 27;
+    for (uint8_t frame = firstFrame; frame < 28; ++frame) {
         tft.fillRect(8, 24, 144, 73, ST77XX_BLACK);
 
         // Deterministic glitch cuts make the boot feel unstable without using
@@ -273,7 +279,8 @@ void DisplayManager::showSplash() {
         tft.drawRoundRect(13, 88, 134, 6, 2, SPECTRUM_BORDER);
         tft.fillRoundRect(14, 89, progress, 4, 1,
                           frame > 20 ? SPECTRUM_CRITICAL : SPECTRUM_HIGH);
-        delay(frame > 20 ? 42 : 28);
+        if (animateSplash)
+            delay(appState.scaledAnimationDelay(frame > 20 ? 42 : 28));
     }
 
     // Resolve the moving instruments into a compact RF monogram.
@@ -288,14 +295,15 @@ void DisplayManager::showSplash() {
     for (uint8_t ray = 0; ray < 12; ray += 3)
         tft.drawLine(80, 59, 80 + sweepX[ray] * 2, 59 + sweepY[ray] * 2,
                      SPECTRUM_CRITICAL);
-    for (uint8_t flash = 0; flash < 3; ++flash) {
+    const uint8_t flashFrames = animateSplash ? 3 : 1;
+    for (uint8_t flash = 0; flash < flashFrames; ++flash) {
         tft.fillRect(21, 99, 118, 10, ST77XX_BLACK);
         if (!(flash & 1)) {
             tft.setCursor(centeredTextX("SIGNAL ACQUIRED"), 101);
             tft.setTextColor(SPECTRUM_CRITICAL, ST77XX_BLACK);
             tft.print("SIGNAL ACQUIRED");
         }
-        delay(95);
+        if (animateSplash) delay(appState.scaledAnimationDelay(95));
     }
     tft.setCursor(centeredTextX("ENTER THE NOISE"), 101);
     tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
@@ -303,7 +311,7 @@ void DisplayManager::showSplash() {
     tft.setCursor(centeredTextX("RFSUITE // Dx4Grey"), 114);
     tft.setTextColor(SPECTRUM_CRITICAL, ST77XX_BLACK);
     tft.print("RFSUITE // Dx4Grey");
-    delay(520);
+    delay(animateSplash ? appState.scaledAnimationDelay(520) : 120);
 }
 
 uint16_t DisplayManager::getSignalColor(uint8_t level) {
@@ -313,7 +321,47 @@ uint16_t DisplayManager::getSignalColor(uint8_t level) {
     return SPECTRUM_CRITICAL;
 }
 
-void DisplayManager::drawModernHeader(const char* title, uint16_t accent) {
+void DisplayManager::drawStatusBar() {
+    // 1. Radio 1 & 2 indicators (x=102..115)
+    const bool r1 = radioManager.isRadio1Connected() || appState.simulationMode;
+    const bool r2 = radioManager.isRadio2Connected() || appState.simulationMode;
+    tft.fillRoundRect(102, 2, 7, 10, 1, r1 ? SPECTRUM_LOW : SPECTRUM_BORDER);
+    tft.setCursor(103, 3);
+    tft.setTextColor(r1 ? ST77XX_BLACK : ST77XX_GRAY, r1 ? SPECTRUM_LOW : SPECTRUM_BORDER);
+    tft.print("1");
+
+    tft.fillRoundRect(110, 2, 7, 10, 1, r2 ? SPECTRUM_LOW : SPECTRUM_BORDER);
+    tft.setCursor(111, 3);
+    tft.setTextColor(r2 ? ST77XX_BLACK : ST77XX_GRAY, r2 ? SPECTRUM_LOW : SPECTRUM_BORDER);
+    tft.print("2");
+
+    // 2. Storage backend (SD or LF) at x=119
+    const bool sd = storageManager.usingSd();
+    tft.fillRoundRect(119, 2, 14, 10, 2, sd ? SPECTRUM_HEADER_BG : SPECTRUM_BORDER);
+    tft.setCursor(120, 3);
+    tft.setTextColor(sd ? SPECTRUM_ACCENT : SPECTRUM_HIGH, sd ? SPECTRUM_HEADER_BG : SPECTRUM_BORDER);
+    tft.print(sd ? "SD" : "LF");
+
+    // 3. REC indicator at x=135
+    if (sessionRecorder.isRecording()) {
+        tft.fillCircle(137, 7, 3, SPECTRUM_CRITICAL);
+    }
+
+    // 4. SIM or RX/TX at x=143
+    tft.setCursor(143, 3);
+    if (appState.simulationMode) {
+        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_HEADER_BG);
+        tft.print("SIM");
+    } else if (appState.jamming || subGhzRawService.isRfTesting()) {
+        tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_HEADER_BG);
+        tft.print("TX");
+    } else {
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+        tft.print("RX");
+    }
+}
+
+void DisplayManager::drawModernHeader(const char* title, uint16_t accent, int page, int totalPages) {
     tft.fillRect(0, 0, 160, 14, SPECTRUM_HEADER_BG);
     if (appState.displayTheme == DISPLAY_THEME_TERMINAL) {
         tft.drawFastHLine(0, 12, 160, SPECTRUM_GRID);
@@ -363,13 +411,205 @@ void DisplayManager::drawModernHeader(const char* title, uint16_t accent) {
         tft.fillCircle(7, 7, 3, accent);
         tft.drawCircle(7, 7, 5, SPECTRUM_BORDER);
     }
+
     tft.setTextSize(1);
     tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
-    tft.setCursor(centeredTextX(String(title)), 3);
-    tft.print(title);
+    tft.setCursor(16, 3);
+    const int maxTitleLen = (totalPages > 0) ? 19 : 14;
+    if (title) {
+        if (static_cast<int>(strlen(title)) <= maxTitleLen) {
+            tft.print(title);
+        } else {
+            char buf[24];
+            strncpy(buf, title, maxTitleLen - 1);
+            buf[maxTitleLen - 1] = '~';
+            buf[maxTitleLen] = '\0';
+            tft.print(buf);
+        }
+    }
+
+    if (totalPages > 0) {
+        tft.fillRoundRect(137, 2, 21, 10, 3, SPECTRUM_BORDER);
+        tft.setCursor(139, 3);
+        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
+        tft.printf("%d/%d", page, totalPages);
+    } else {
+        drawStatusBar();
+    }
+}
+
+void DisplayManager::showToast(const char* message, ToastType type, uint16_t durationMs) {
+    if (!message) return;
+    snprintf(toastMessage, sizeof(toastMessage), "%s", message);
+    toastType = type;
+    toastStartMs = millis();
+    toastDurationMs = durationMs;
+    toastActive = true;
+    needRedraw = true;
+}
+
+void DisplayManager::drawToastOverlay() {
+    if (!toastActive) return;
+    const unsigned long now = millis();
+    if (now - toastStartMs >= toastDurationMs) {
+        toastActive = false;
+        needRedraw = true;
+        return;
+    }
+
+    uint16_t borderColor = SPECTRUM_ACCENT;
+    uint16_t iconColor = SPECTRUM_ACCENT;
+    const char* icon = "[i]";
+    if (toastType == TOAST_SUCCESS) {
+        borderColor = SPECTRUM_LOW;
+        iconColor = SPECTRUM_LOW;
+        icon = "[OK]";
+    } else if (toastType == TOAST_WARN) {
+        borderColor = SPECTRUM_HIGH;
+        iconColor = SPECTRUM_HIGH;
+        icon = "[!]";
+    } else if (toastType == TOAST_ERROR) {
+        borderColor = SPECTRUM_CRITICAL;
+        iconColor = SPECTRUM_CRITICAL;
+        icon = "[X]";
+    }
+
+    const int w = min(152, (static_cast<int>(strlen(toastMessage)) + 5) * 6 + 10);
+    const int x = (160 - w) / 2;
+    const int y = 88;
+
+    tft.fillRoundRect(x, y, w, 15, 3, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(x, y, w, 15, 3, borderColor);
+    tft.setCursor(x + 4, y + 4);
+    tft.setTextColor(iconColor, SPECTRUM_CARD_BG);
+    tft.print(icon);
+    tft.print(" ");
+    tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+    tft.print(toastMessage);
+}
+
+void DisplayManager::showActionableError(const char* title, const char* subtitle, const char* details) {
+    errorModalTitle = title ? title : "ERROR";
+    errorModalSubtitle = subtitle ? subtitle : "";
+    errorModalDetails = details ? details : "";
+    errorModalShowingDetails = false;
+    errorModalActive = true;
+    needRedraw = true;
+}
+
+void DisplayManager::closeActionableError() {
+    errorModalActive = false;
+    errorModalShowingDetails = false;
+    needRedraw = true;
+}
+
+void DisplayManager::drawActionableErrorModal() {
+    if (!errorModalActive) return;
+
+    tft.fillRoundRect(8, 16, 144, 88, 5, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(8, 16, 144, 88, 5, SPECTRUM_CRITICAL);
+
+    if (!errorModalShowingDetails) {
+        tft.fillRoundRect(10, 18, 140, 14, 3, SPECTRUM_HEADER_BG);
+        tft.setCursor(14, 21);
+        tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_HEADER_BG);
+        tft.print("[!] ");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
+        tft.print(errorModalTitle);
+
+        tft.setCursor(14, 38);
+        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+        tft.print(errorModalSubtitle);
+
+        tft.setCursor(14, 52);
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print("Backend: ");
+        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+        tft.print(storageManager.backendName());
+
+        tft.setCursor(14, 64);
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print("Status : ");
+        tft.setTextColor(storageManager.usingSd() ? SPECTRUM_LOW : SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
+        tft.print(storageManager.sdStatus());
+
+        tft.fillRoundRect(12, 84, 66, 16, 3, SPECTRUM_HEADER_BG);
+        tft.drawRoundRect(12, 84, 66, 16, 3, SPECTRUM_BORDER);
+        tft.setCursor(16, 88);
+        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+        tft.print("A: DETAILS");
+
+        tft.fillRoundRect(82, 84, 66, 16, 3, SPECTRUM_HEADER_BG);
+        tft.drawRoundRect(82, 84, 66, 16, 3, SPECTRUM_BORDER);
+        tft.setCursor(90, 88);
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
+        tft.print("B: CLOSE");
+    } else {
+        tft.fillRoundRect(10, 18, 140, 14, 3, SPECTRUM_HEADER_BG);
+        tft.setCursor(14, 21);
+        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+        tft.print("ERROR DETAILS");
+
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        int lineY = 36;
+        int start = 0;
+        for (int i = 0; i <= errorModalDetails.length(); ++i) {
+            if (i == errorModalDetails.length() || errorModalDetails[i] == '\n') {
+                String sub = errorModalDetails.substring(start, i);
+                tft.setCursor(12, lineY);
+                tft.print(sub);
+                lineY += 10;
+                start = i + 1;
+                if (lineY > 74) break;
+            }
+        }
+
+        tft.fillRoundRect(12, 84, 66, 16, 3, SPECTRUM_HEADER_BG);
+        tft.drawRoundRect(12, 84, 66, 16, 3, SPECTRUM_BORDER);
+        tft.setCursor(16, 88);
+        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+        tft.print("A: SUMMARY");
+
+        tft.fillRoundRect(82, 84, 66, 16, 3, SPECTRUM_HEADER_BG);
+        tft.drawRoundRect(82, 84, 66, 16, 3, SPECTRUM_BORDER);
+        tft.setCursor(90, 88);
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
+        tft.print("B: CLOSE");
+    }
+}
+
+void DisplayManager::drawEmptyState(const char* title, const char* message, const char* actionA, const char* actionB) {
+    tft.fillRoundRect(8, 20, 144, 82, 5, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(8, 20, 144, 82, 5, SPECTRUM_BORDER);
+
+    tft.setCursor(max(0, static_cast<int>(centeredTextX(title ? title : "", 1))), 26);
+    tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+    tft.print(title ? title : "");
+
+    tft.drawFastHLine(14, 37, 132, SPECTRUM_GRID);
+
+    int y = 43;
+    if (message && message[0]) {
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        int start = 0;
+        int len = strlen(message);
+        for (int i = 0; i <= len; ++i) {
+            if (i == len || message[i] == '\n') {
+                String sub = String(message).substring(start, i);
+                tft.setCursor(max(0, static_cast<int>(centeredTextX(sub, 1))), y);
+                tft.print(sub);
+                y += 11;
+                start = i + 1;
+                if (y > 75) break;
+            }
+        }
+    }
+
+    drawModernFooter(actionA && actionA[0] ? actionA : "", "", actionB && actionB[0] ? actionB : "B BACK");
 }
 
 void DisplayManager::drawFooterChip(int x, int width, const char* label) {
+    if (!label || !label[0]) return;
     int radius = 3;
     if (appState.displayTheme == DISPLAY_THEME_TERMINAL ||
         appState.displayTheme == DISPLAY_THEME_RETRO ||
@@ -388,20 +628,29 @@ void DisplayManager::drawFooterChip(int x, int width, const char* label) {
         tft.drawFastHLine(x + 2, 109, width - 4, SPECTRUM_HIGH);
     else if (appState.displayTheme == DISPLAY_THEME_TERMINAL)
         tft.drawFastVLine(x + 2, 110, 10, SPECTRUM_ACCENT);
-    int textX = x + (width - static_cast<int>(strlen(label)) * 6) / 2;
+    
+    char buf[12];
+    int maxChars = (width - 4) / 6;
+    if (maxChars < 1) maxChars = 1;
+    strncpy(buf, label, maxChars);
+    buf[maxChars] = '\0';
+    int textLen = strlen(buf);
+    int textX = x + (width - textLen * 6) / 2;
+    if (textX < x + 1) textX = x + 1;
     tft.setCursor(textX, 111);
     tft.setTextColor(SPECTRUM_ACCENT, DISPLAY_FOOTER_BG);
-    tft.print(label);
+    tft.print(buf);
 }
 
 void DisplayManager::drawThemeAnimation() {
+    if (!appState.animationsEnabled || !appState.themeAnimationEnabled) return;
     const unsigned long now = millis();
     // Keep decoration off timing-sensitive RF and full-surface media screens.
     if (subGhzReplayActive || subGhzRawService.isRecording() ||
         subGhzRawService.isRfTesting() || appState.appMode == APP_MODE_VIDEO_PLAYER ||
         appState.appMode == APP_MODE_PHOTO_VIEWER || appState.appMode == APP_MODE_REBOOT ||
         appState.appMode == APP_MODE_SHUTDOWN) return;
-    if (now - lastThemeAnimationMs < 180) return;
+    if (now - lastThemeAnimationMs < appState.scaledAnimationDelay(180)) return;
     lastThemeAnimationMs = now;
     const uint8_t frame = themeAnimationFrame++;
     tft.fillRect(0, 1, 15, 11, SPECTRUM_HEADER_BG);

@@ -39,6 +39,16 @@ struct AppState {
     bool subGhzAutoTrigger = true;
     int16_t subGhzTriggerThreshold = -80;
     uint8_t subGhzReplayRepeats = 1;
+    bool onboardingComplete = false;
+    bool analyzerAutoScale = false;
+    // Controls decorative UI motion globally. Operational progress indicators
+    // remain active so long-running RF/storage actions still communicate state.
+    bool animationsEnabled = true;
+    bool bootAnimationEnabled = true;
+    bool menuAnimationEnabled = true;
+    bool themeAnimationEnabled = true;
+    bool activityAnimationEnabled = true;
+    uint8_t animationSpeed = 1; // 0=SLOW, 1=NORMAL, 2=FAST
 
     // ----- ANALYZER STATE -----
     AnalyzerBand analyzerBand = SCAN_BAND_ALL;
@@ -109,6 +119,8 @@ struct AppState {
     void cycleDisplayOrientation();
     void applyThemeProfile();
     const char* getMenuLayoutName() const;
+    const char* getAnimationSpeedName() const;
+    uint16_t scaledAnimationDelay(uint16_t normalMs) const;
 
     void cycleAnalyzerBand(int direction = 1);
     const char* getAnalyzerBandName() const;

@@ -7,7 +7,7 @@ using namespace DisplayUi;
 void DisplayManager::renderPacketSnifferScreen() {
     if (appState.simulationMode) {
         if (!snifferLayoutDrawn) {
-            drawModernHeader("SIM PACKET SNIFFER", SPECTRUM_ACCENT);
+            drawModernHeader("SIM SNIFFER", SPECTRUM_ACCENT);
             tft.fillRoundRect(5, 17, 150, 86, 4, SPECTRUM_CARD_BG);
             tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
             tft.setCursor(10, 22); tft.setTextColor(SPECTRUM_LOW, SPECTRUM_CARD_BG);
@@ -15,7 +15,7 @@ void DisplayManager::renderPacketSnifferScreen() {
             tft.setCursor(10, 38); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
             tft.print("PACKETS");
             tft.setCursor(10, 55); tft.print("SAMPLE HEX");
-            drawModernFooter("", "SIMULATION", "B BACK");
+            drawModernFooter("", "A DEMO", "B BACK");
             snifferLayoutDrawn = true;
         }
         const uint32_t demoPackets = millis() / 700;
@@ -31,7 +31,7 @@ void DisplayManager::renderPacketSnifferScreen() {
         return;
     }
     if (!snifferLayoutDrawn) {
-        drawModernHeader("NRF24 PACKET SNIFFER", SPECTRUM_ACCENT);
+        drawModernHeader("PKT SNIFFER", SPECTRUM_ACCENT);
         tft.fillRoundRect(5, 17, 150, 86, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
         tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
@@ -39,7 +39,7 @@ void DisplayManager::renderPacketSnifferScreen() {
         tft.setCursor(10, 34); tft.print("CH / RATE");
         tft.setCursor(10, 46); tft.print("PACKETS");
         tft.drawFastHLine(10, 58, 140, SPECTRUM_GRID);
-        drawModernFooter("U/D CH", "A 1M/2M", "B STOP");
+        drawModernFooter("U/D CH", "A RATE", "B BACK");
         snifferLayoutDrawn = true;
     }
 

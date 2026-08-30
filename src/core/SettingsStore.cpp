@@ -5,7 +5,7 @@
 #include "core/SettingsValidation.h"
 
 namespace {
-constexpr uint8_t SETTINGS_SCHEMA_VERSION = 8;
+constexpr uint8_t SETTINGS_SCHEMA_VERSION = 10;
 constexpr unsigned long SETTINGS_SAVE_DELAY_MS = 1500;
 }
 
@@ -93,6 +93,18 @@ void AppState::loadSettings() {
     }
     if (storedSchema >= 8) {
         displayRotation = constrain(prefs.getUChar("display_rot", 3), 0, 3);
+        onboardingComplete = prefs.getBool("onboard_done", false);
+        analyzerAutoScale = prefs.getBool("auto_scale", false);
+    }
+    if (storedSchema >= 9) {
+        animationsEnabled = prefs.getBool("animations", true);
+    }
+    if (storedSchema >= 10) {
+        bootAnimationEnabled = prefs.getBool("anim_boot", true);
+        menuAnimationEnabled = prefs.getBool("anim_menu", true);
+        themeAnimationEnabled = prefs.getBool("anim_theme", true);
+        activityAnimationEnabled = prefs.getBool("anim_active", true);
+        animationSpeed = constrain(prefs.getUChar("anim_speed", 1), 0, 2);
     }
     prefs.end();
 
@@ -112,6 +124,14 @@ void AppState::saveSettings() {
     prefs.putInt("custom", customSpectrumSamples);
     prefs.putUChar("theme", static_cast<uint8_t>(displayTheme));
     prefs.putUChar("display_rot", displayRotation);
+    prefs.putBool("onboard_done", onboardingComplete);
+    prefs.putBool("auto_scale", analyzerAutoScale);
+    prefs.putBool("animations", animationsEnabled);
+    prefs.putBool("anim_boot", bootAnimationEnabled);
+    prefs.putBool("anim_menu", menuAnimationEnabled);
+    prefs.putBool("anim_theme", themeAnimationEnabled);
+    prefs.putBool("anim_active", activityAnimationEnabled);
+    prefs.putUChar("anim_speed", animationSpeed);
     prefs.putBool("sniff_sd", saveSniffPacketsToSd);
     prefs.putUChar("sub_pre", subGhzRadioPreset);
     prefs.putUChar("sub_reg", subGhzRegion);
@@ -174,6 +194,14 @@ void AppState::factoryResetSettings() {
     scanProfile = SCAN_PROFILE_BALANCED;
     customSpectrumSamples = 40;
     analyzerTraceMode = ANALYZER_TRACE_LIVE;
+    analyzerAutoScale = false;
+    animationsEnabled = true;
+    bootAnimationEnabled = true;
+    menuAnimationEnabled = true;
+    themeAnimationEnabled = true;
+    activityAnimationEnabled = true;
+    animationSpeed = 1;
+    onboardingComplete = false;
     configureEventEngine(60, 10, 2, 1);
     memset(watchedChannels, 0, sizeof(watchedChannels));
     rfEnvironmentState.config = RfEnvironmentConfig();

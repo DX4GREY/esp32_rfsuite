@@ -199,11 +199,34 @@ const char* SessionRecorder::previousPath() const {
     return storageManager.usingSd() ? "/RFSuite/log/rf_session_previous.csv" : "/rf_session_previous.csv";
 }
 
+bool SessionRecorder::hasCurrentSession() const {
+    fs::FS& fs = storageManager.filesystem();
+    return ready && fs.exists(storageManager.sessionPath());
+}
+
+bool SessionRecorder::hasPreviousSession() const {
+    fs::FS& fs = storageManager.filesystem();
+    return ready && fs.exists(previousPath());
+}
+
+bool SessionRecorder::deleteCurrentSession() {
+    if (recording) stop();
+    fs::FS& fs = storageManager.filesystem();
+    if (!ready || !fs.exists(storageManager.sessionPath())) return false;
+    const bool deleted = fs.remove(storageManager.sessionPath());
+    sweepCount = 0;
+    pendingLength = 0;
+    if (deleted) eventLog.info("session", "deleted current session");
+    return deleted;
+}
+
 bool SessionRecorder::summarize(const char* filePath, uint32_t& sweeps,
-                                uint8_t& peakChannel, uint8_t& average) {
+                                uint8_t& peakChannel, uint8_t& peakLevel,
+                                uint8_t& average, uint8_t* channelAvgs) {
     File file = storageManager.filesystem().open(filePath, FILE_READ);
     if (!file) return false;
     uint64_t totals[TOTAL_CHANNELS] = {};
+    uint8_t maxPerChannel[TOTAL_CHANNELS] = {};
     sweeps = 0;
     String line;
     while (file.available()) {
@@ -211,33 +234,79 @@ bool SessionRecorder::summarize(const char* filePath, uint32_t& sweeps,
         if (!line.startsWith("S,")) continue;
         SessionFormat::Sweep parsed;
         if (!SessionFormat::parseSweepLine(line.c_str(), parsed)) continue;
-        for (size_t channel = 0; channel < TOTAL_CHANNELS; ++channel) totals[channel] += parsed.levels[channel];
+        for (size_t channel = 0; channel < TOTAL_CHANNELS; ++channel) {
+            totals[channel] += parsed.levels[channel];
+            if (parsed.levels[channel] > maxPerChannel[channel]) {
+                maxPerChannel[channel] = parsed.levels[channel];
+            }
+        }
         ++sweeps;
         yield();
     }
     file.close();
     if (!sweeps) return false;
-    uint64_t grandTotal = 0, best = 0;
+    uint64_t grandTotal = 0, bestTotal = 0;
     peakChannel = 0;
+    peakLevel = 0;
     for (size_t channel = 0; channel < TOTAL_CHANNELS; ++channel) {
         grandTotal += totals[channel];
-        if (totals[channel] > best) { best = totals[channel]; peakChannel = channel; }
+        if (totals[channel] > bestTotal) {
+            bestTotal = totals[channel];
+            peakChannel = static_cast<uint8_t>(channel);
+            peakLevel = maxPerChannel[channel];
+        }
+        if (channelAvgs) {
+            channelAvgs[channel] = static_cast<uint8_t>(totals[channel] / sweeps);
+        }
     }
     average = static_cast<uint8_t>(grandTotal / (static_cast<uint64_t>(sweeps) * TOTAL_CHANNELS));
     return true;
+}
+
+bool SessionRecorder::summarizeCurrent(uint32_t& sweeps, uint8_t& peakChannel, uint8_t& peakLevel, uint8_t& average) {
+    flushPending();
+    return summarize(storageManager.sessionPath(), sweeps, peakChannel, peakLevel, average, nullptr);
+}
+
+bool SessionRecorder::summarizePrevious(uint32_t& sweeps, uint8_t& peakChannel, uint8_t& peakLevel, uint8_t& average) {
+    return summarize(previousPath(), sweeps, peakChannel, peakLevel, average, nullptr);
 }
 
 bool SessionRecorder::compareWithPrevious(SessionComparison& result) {
     flushPending();
     SessionComparison compared{};
     if (!summarize(previousPath(), compared.previousSweeps, compared.previousPeakChannel,
-                   compared.previousAverage) ||
+                   compared.previousPeakLevel, compared.previousAverage, compared.previousChannelAvg) ||
         !summarize(storageManager.sessionPath(), compared.currentSweeps,
-                   compared.currentPeakChannel, compared.currentAverage)) {
+                   compared.currentPeakChannel, compared.currentPeakLevel, compared.currentAverage, compared.currentChannelAvg)) {
         errorMessage = "two valid sessions required";
         return false;
     }
     compared.averageDelta = static_cast<int16_t>(compared.currentAverage) - compared.previousAverage;
+
+    // Find top 5 channels with highest absolute delta
+    ChannelDelta ranked[TOTAL_CHANNELS];
+    for (int ch = 0; ch < TOTAL_CHANNELS; ++ch) {
+        ranked[ch].channel = static_cast<uint8_t>(ch);
+        ranked[ch].delta = static_cast<int16_t>(compared.currentChannelAvg[ch]) - compared.previousChannelAvg[ch];
+    }
+    // Simple top 5 selection
+    for (int pos = 0; pos < 5; ++pos) {
+        int bestIdx = pos;
+        int bestAbs = abs(ranked[pos].delta);
+        for (int i = pos + 1; i < TOTAL_CHANNELS; ++i) {
+            int curAbs = abs(ranked[i].delta);
+            if (curAbs > bestAbs) {
+                bestAbs = curAbs;
+                bestIdx = i;
+            }
+        }
+        ChannelDelta temp = ranked[pos];
+        ranked[pos] = ranked[bestIdx];
+        ranked[bestIdx] = temp;
+        compared.topDeltas[pos] = ranked[pos];
+    }
+
     result = compared;
     return true;
 }

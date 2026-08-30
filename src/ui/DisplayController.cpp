@@ -11,6 +11,9 @@
 #include "services/StorageManager.h"
 #include "services/PacketSniffer.h"
 #include "services/SubGhzRawService.h"
+#include "services/EventLog.h"
+
+using namespace DisplayUi;
 
 void yieldToUI();
 
@@ -147,6 +150,12 @@ void DisplayManager::updateUI() {
                 needRedraw = false;
             }
             break;
+        case APP_MODE_ANIMATION_SETTINGS:
+            if (needRedraw) {
+                renderAnimationSettingsScreen();
+                needRedraw = false;
+            }
+            break;
         case APP_MODE_STATUS:
             if (needRedraw || lastStatusRenderMs == 0 ||
                 millis() - lastStatusRenderMs >= 1000) {
@@ -207,6 +216,39 @@ void DisplayManager::updateUI() {
                 needRedraw = false;
             }
             break;
+        case APP_MODE_DATA_MENU:
+            if (needRedraw) { renderDataMenuScreen(); needRedraw = false; }
+            break;
+        case APP_MODE_STORAGE_HEALTH:
+            if (needRedraw) {
+                renderStorageHealthScreen();
+                needRedraw = false;
+            }
+            break;
+        case APP_MODE_EVENT_LOG:
+            if (needRedraw) {
+                renderEventLogScreen();
+                needRedraw = false;
+            }
+            break;
+        case APP_MODE_ONBOARDING:
+            if (needRedraw) {
+                renderOnboardingScreen();
+                needRedraw = false;
+            }
+            break;
+        case APP_MODE_SESSION_MANAGER:
+            if (needRedraw) {
+                renderSessionManagerScreen();
+                needRedraw = false;
+            }
+            break;
+        case APP_MODE_SESSION_COMPARE:
+            if (needRedraw) {
+                renderSessionCompareScreen();
+                needRedraw = false;
+            }
+            break;
         case APP_MODE_VIDEO_PLAYER:
             renderVideoPlayer();
             needRedraw = false;
@@ -223,6 +265,8 @@ void DisplayManager::updateUI() {
             break;
     }
     drawThemeAnimation();
+    if (errorModalActive) drawActionableErrorModal();
+    if (toastActive) drawToastOverlay();
 }
 
 // =============================================================================
@@ -256,13 +300,188 @@ void DisplayManager::processInput() {
         }
     } modeTransitionGuard{appState.appMode};
 
+    // Global Error Modal interceptor (Requirement 2)
+    if (errorModalActive) {
+        if (buttonManager.isPressed(BTN_A)) {
+            errorModalShowingDetails = !errorModalShowingDetails;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            closeActionableError();
+        }
+        return;
+    }
+
+    // Onboarding Mode (Requirement 18)
+    if (appState.appMode == APP_MODE_ONBOARDING) {
+        if (buttonManager.isPressed(BTN_A)) {
+            if (onboardingPage < 2) {
+                onboardingPage++;
+                needRedraw = true;
+            } else {
+                appState.onboardingComplete = true;
+                appState.saveSettings();
+                appState.appMode = APP_MODE_BAND_SELECT;
+                showToast("SETUP COMPLETE", TOAST_SUCCESS);
+                needRedraw = true;
+            }
+        } else if (buttonManager.isPressed(BTN_B)) {
+            if (onboardingPage > 0) {
+                onboardingPage--;
+                needRedraw = true;
+            } else {
+                appState.onboardingComplete = true;
+                appState.saveSettings();
+                appState.appMode = APP_MODE_BAND_SELECT;
+                showToast("SETUP SKIPPED", TOAST_INFO);
+                needRedraw = true;
+            }
+        }
+        return;
+    }
+
+    // Storage Health Screen (Requirement 10)
+    if (appState.appMode == APP_MODE_STORAGE_HEALTH) {
+        if (buttonManager.isLongPressed(BTN_A)) {
+            String res;
+            const bool ok = storageManager.benchmarkTest(res);
+            storageTestResult = res;
+            showToast(res.c_str(), ok ? TOAST_SUCCESS : TOAST_ERROR);
+            needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_A)) {
+            const bool ok = storageManager.retrySd();
+            if (ok) showToast("SD MOUNTED", TOAST_SUCCESS);
+            else showToast(storageManager.lastError(), TOAST_ERROR);
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            appState.appMode = APP_MODE_DATA_MENU;
+            needRedraw = true;
+        }
+        return;
+    }
+
+    // Event Log Screen (Requirement 11)
+    if (appState.appMode == APP_MODE_EVENT_LOG) {
+        int step = 1;
+        const size_t total = eventLog.countEntries();
+        if (buttonManager.isLongPressed(BTN_A)) {
+            if (eventLog.exportTo(Serial)) showToast("LOG EXPORTED", TOAST_SUCCESS);
+            else showToast("EXPORT FAILED", TOAST_ERROR);
+            needRedraw = true;
+        } else if (buttonManager.isLongPressed(BTN_B)) {
+            eventLog.clear();
+            eventLogSelection = 0;
+            eventLogScrollOffset = 0;
+            showToast("LOG CLEARED", TOAST_WARN);
+            needRedraw = true;
+        } else if (buttonManager.isPressedOrRepeat(BTN_UP, step)) {
+            if (eventLogSelection >= static_cast<size_t>(step)) eventLogSelection -= step;
+            else eventLogSelection = 0;
+            if (eventLogSelection < eventLogScrollOffset) eventLogScrollOffset = eventLogSelection;
+            needRedraw = true;
+        } else if (buttonManager.isPressedOrRepeat(BTN_DOWN, step)) {
+            if (total > 0) {
+                eventLogSelection = min(total - 1, eventLogSelection + step);
+                if (eventLogSelection >= eventLogScrollOffset + 6) eventLogScrollOffset = eventLogSelection - 5;
+            }
+            needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_A)) {
+            eventLogDetailOpen = !eventLogDetailOpen;
+            needRedraw = true;
+        } else if (buttonManager.isShortReleased(BTN_B)) {
+            if (eventLogDetailOpen) {
+                eventLogDetailOpen = false;
+                needRedraw = true;
+            } else {
+                appState.appMode = APP_MODE_DATA_MENU;
+                needRedraw = true;
+            }
+        }
+        return;
+    }
+
+    // Session Manager Screen (Requirement 12)
+    if (appState.appMode == APP_MODE_SESSION_MANAGER) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            sessionManagerSelection = (sessionManagerSelection + 5) % 6;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            sessionManagerSelection = (sessionManagerSelection + 1) % 6;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            if (sessionManagerSelection == 0) {
+                if (sessionRecorder.isRecording()) {
+                    sessionRecorder.stop();
+                    showToast("SESSION STOPPED", TOAST_WARN);
+                } else {
+                    if (sessionRecorder.start()) showToast("SESSION STARTED", TOAST_SUCCESS);
+                    else showActionableError("SD WRITE FAILED", "Using LittleFS", "SD card write timed out.\nActive backend: LittleFS\nSuggest: Re-insert SD.");
+                }
+            } else if (sessionManagerSelection == 1) {
+                uint32_t sw = 0; uint8_t pch = 0, plvl = 0, avg = 0;
+                if (sessionRecorder.summarizeCurrent(sw, pch, plvl, avg)) {
+                    char buf[32]; snprintf(buf, sizeof(buf), "CH%u %u%% AVG%u%%", pch, plvl, avg);
+                    showToast(buf, TOAST_INFO);
+                } else showToast("NO CURRENT SESSION", TOAST_WARN);
+            } else if (sessionManagerSelection == 2) {
+                uint32_t sw = 0; uint8_t pch = 0, plvl = 0, avg = 0;
+                if (sessionRecorder.summarizePrevious(sw, pch, plvl, avg)) {
+                    char buf[32]; snprintf(buf, sizeof(buf), "PREV CH%u %u%%", pch, plvl);
+                    showToast(buf, TOAST_INFO);
+                } else showToast("NO PREV SESSION", TOAST_WARN);
+            } else if (sessionManagerSelection == 3) {
+                appState.appMode = APP_MODE_SESSION_COMPARE;
+            } else if (sessionManagerSelection == 4) {
+                if (sessionRecorder.exportCsv(Serial)) showToast("EXPORTED TO SERIAL", TOAST_SUCCESS);
+                else showToast("EXPORT FAILED", TOAST_ERROR);
+            } else if (sessionManagerSelection == 5) {
+                if (sessionRecorder.deleteCurrentSession()) showToast("SESSION DELETED", TOAST_WARN);
+                else showToast("NOTHING TO DELETE", TOAST_INFO);
+            }
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            appState.appMode = APP_MODE_DATA_MENU;
+            needRedraw = true;
+        }
+        return;
+    }
+
+    // Session Compare Screen (Requirement 6)
+    if (appState.appMode == APP_MODE_SESSION_COMPARE) {
+        if (buttonManager.isPressed(BTN_A)) {
+            sessionRecorder.start();
+            appState.appMode = APP_MODE_ANALYZER_SPECTRUM;
+            showToast("SESSION STARTED", TOAST_SUCCESS);
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            appState.appMode = APP_MODE_SESSION_MANAGER;
+            needRedraw = true;
+        }
+        return;
+    }
+
+    if (appState.appMode == APP_MODE_DATA_MENU) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            dataMenuSelection = (dataMenuSelection + 2) % 3; needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            dataMenuSelection = (dataMenuSelection + 1) % 3; needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            appState.appMode = dataMenuSelection == 0 ? APP_MODE_SESSION_MANAGER :
+                               (dataMenuSelection == 1 ? APP_MODE_STORAGE_HEALTH : APP_MODE_EVENT_LOG);
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            appState.appMode = APP_MODE_BAND_SELECT; needRedraw = true;
+        }
+        return;
+    }
+
     if (appState.appMode == APP_MODE_BAND_SELECT) {
+        const int mainItemCount = appState.animationsEnabled ? 9 : 8;
         if (buttonManager.isPressed(BTN_UP)) {
             previousBandSelection = bandSelection;
             previousMainMenuScrollOffset = mainMenuScrollOffset;
-            bandSelection = (bandSelection + 6) % 7;
+            bandSelection = (bandSelection + mainItemCount - 1) % mainItemCount;
             const int slot = bandSelection % 6;
-            if (bandSelection == 6) mainMenuScrollOffset = 0;
+            if (bandSelection >= 6) mainMenuScrollOffset = 0;
             else if (slot < mainMenuScrollOffset) mainMenuScrollOffset = slot;
             else if (slot >= mainMenuScrollOffset + 4) mainMenuScrollOffset = slot - 3;
             if (previousBandSelection / 6 != bandSelection / 6) needRedraw = true;
@@ -270,9 +489,9 @@ void DisplayManager::processInput() {
         } else if (buttonManager.isPressed(BTN_DOWN)) {
             previousBandSelection = bandSelection;
             previousMainMenuScrollOffset = mainMenuScrollOffset;
-            bandSelection = (bandSelection + 1) % 7;
+            bandSelection = (bandSelection + 1) % mainItemCount;
             const int slot = bandSelection % 6;
-            if (bandSelection == 6 || bandSelection == 0) mainMenuScrollOffset = 0;
+            if (bandSelection >= 6 || bandSelection == 0) mainMenuScrollOffset = 0;
             else if (slot >= mainMenuScrollOffset + 4) mainMenuScrollOffset = slot - 3;
             if (previousBandSelection / 6 != bandSelection / 6) needRedraw = true;
             else mainMenuNeedsPartialRedraw = true;
@@ -285,29 +504,33 @@ void DisplayManager::processInput() {
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             radioManager.stopAll();
-            if (bandSelection == 0) {
+            const int featureIndex = (!appState.animationsEnabled && bandSelection >= 7) ?
+                                     bandSelection + 1 : bandSelection;
+            if (featureIndex == 0) {
                 appState.radioBand = RADIO_BAND_24_GHZ;
                 if (radioManager.isConnected()) {
                     appState.simulationMode = false;
                     appState.appMode = APP_MODE_MENU;
                 } else appState.appMode = APP_MODE_SUBGHZ_OFFLINE;
-            } else if (bandSelection == 1) {
+            } else if (featureIndex == 1) {
                 appState.radioBand = RADIO_BAND_SUB_GHZ;
                 if (cc1101Manager.isConnected()) {
                     appState.simulationMode = false;
                     subGhzRawService.setSimulationMode(false);
                     appState.appMode = APP_MODE_SUBGHZ;
                 } else appState.appMode = APP_MODE_SUBGHZ_OFFLINE;
-            } else if (bandSelection == 2) appState.appMode = APP_MODE_SETTINGS;
-            else if (bandSelection == 3) appState.appMode = APP_MODE_STATUS;
-            else if (bandSelection == 4) {
+            } else if (featureIndex == 2) appState.appMode = APP_MODE_SETTINGS;
+            else if (featureIndex == 3) appState.appMode = APP_MODE_STATUS;
+            else if (featureIndex == 4) {
                 luaScriptCount = 0; luaScriptSelection = 0; luaRunStatus = "";
                 luaOutput = ""; luaShowingOutput = false; luaOutputScroll = 0;
                 luaShowingGui = false; appState.appMode = APP_MODE_LUA_SCRIPTS;
-            } else if (bandSelection == 5) {
+            } else if (featureIndex == 5) {
                 filePath = "/"; fileEntryCount = 0; fileSelection = 0; fileStatus = "";
                 appState.appMode = APP_MODE_FILE_EXPLORER;
-            } else appState.appMode = APP_MODE_POWER;
+            } else if (featureIndex == 6) appState.appMode = APP_MODE_DATA_MENU;
+            else if (featureIndex == 7) appState.appMode = APP_MODE_ANIMATION_SETTINGS;
+            else appState.appMode = APP_MODE_POWER;
             needRedraw = true;
         }
         return;
@@ -640,30 +863,46 @@ void DisplayManager::processInput() {
     // CONDITION 3: SPECTRUM ANALYZER
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_ANALYZER_SPECTRUM) {
+        int step = 1;
         if (buttonManager.isLongPressed(BTN_UP)) {
             appState.cycleAnalyzerTraceMode(1);
+            char buf[24];
+            snprintf(buf, sizeof(buf), "TRACE: %s", appState.getAnalyzerTraceModeName());
+            showToast(buf, TOAST_INFO);
             needRedraw = true;
         } else if (buttonManager.isLongPressed(BTN_DOWN)) {
             appState.cycleAnalyzerZoom();
+            char buf[24];
+            snprintf(buf, sizeof(buf), "ZOOM: %ux", appState.analyzerZoom);
+            showToast(buf, TOAST_INFO);
             needRedraw = true;
         } else if (buttonManager.isLongPressed(BTN_A)) {
             appState.captureBaseline();
+            showToast("BASELINE CAPTURED", TOAST_SUCCESS);
             needRedraw = true;
         } else if (buttonManager.isLongPressed(BTN_B)) {
             appState.toggleWatchChannel(appState.cursorChannel);
+            showToast(appState.watchedChannels[appState.cursorChannel] ? "WATCH ADDED" : "WATCH REMOVED", TOAST_INFO);
             needRedraw = true;
-        } else if (buttonManager.isShortReleased(BTN_UP)) {
-            if (appState.analyzerFrozen) appState.setCursorChannel(appState.cursorChannel + 1, false);
-            else { appState.cycleAnalyzerBand(1); radioManager.requestScanAbort(); }
+        } else if (appState.analyzerFrozen && buttonManager.isPressedOrRepeat(BTN_UP, step)) {
+            appState.setCursorChannel(appState.cursorChannel + step, false);
             needRedraw = true;
-        } else if (buttonManager.isShortReleased(BTN_DOWN)) {
-            if (appState.analyzerFrozen) appState.setCursorChannel(appState.cursorChannel - 1, false);
-            else { appState.cycleAnalyzerRadioMode(1); radioManager.requestScanAbort(); }
+        } else if (appState.analyzerFrozen && buttonManager.isPressedOrRepeat(BTN_DOWN, step)) {
+            appState.setCursorChannel(appState.cursorChannel - step, false);
+            needRedraw = true;
+        } else if (!appState.analyzerFrozen && buttonManager.isShortReleased(BTN_UP)) {
+            appState.cycleAnalyzerBand(1);
+            radioManager.requestScanAbort();
+            needRedraw = true;
+        } else if (!appState.analyzerFrozen && buttonManager.isShortReleased(BTN_DOWN)) {
+            appState.cycleAnalyzerRadioMode(1);
+            radioManager.requestScanAbort();
             needRedraw = true;
         } else if (buttonManager.isShortReleased(BTN_A)) {
             appState.analyzerFrozen = !appState.analyzerFrozen;
             if (appState.analyzerFrozen) radioManager.requestScanAbort();
             if (!appState.analyzerFrozen) appState.cursorFollowsPeak = true;
+            showToast(appState.analyzerFrozen ? "FROZEN" : "LIVE", TOAST_INFO);
             needRedraw = true;
         } else if (buttonManager.isShortReleased(BTN_B)) {
             radioManager.stopAll();
@@ -683,6 +922,7 @@ void DisplayManager::processInput() {
             memset(appState.waterfall, 0, sizeof(appState.waterfall));
             appState.waterfallHead = 0;
             appState.waterfallCount = 0;
+            showToast("WATERFALL RESET", TOAST_INFO);
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
             radioManager.stopAll();
@@ -697,6 +937,7 @@ void DisplayManager::processInput() {
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             appState.resetSurvey();
+            showToast("SURVEY RESET", TOAST_INFO);
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
             radioManager.stopAll();
@@ -727,6 +968,7 @@ void DisplayManager::processInput() {
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             appState.clearEvents();
+            showToast("EVENTS CLEARED", TOAST_WARN);
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
             radioManager.stopAll();
@@ -739,8 +981,11 @@ void DisplayManager::processInput() {
             if (appState.loggingEnabled) {
                 appState.loggingEnabled = false;
                 sessionRecorder.stop();
+                showToast("LOGGING STOPPED", TOAST_WARN);
             } else {
                 appState.loggingEnabled = sessionRecorder.start();
+                if (appState.loggingEnabled) showToast("LOGGING STARTED", TOAST_SUCCESS);
+                else showActionableError("LOG START FAILED", "Storage Error", "Could not start session logger.");
             }
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
@@ -776,12 +1021,13 @@ void DisplayManager::processInput() {
     // CONDITION 4: CHANNEL INSPECTOR
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_ANALYZER_CHANNEL) {
-        if (buttonManager.isPressed(BTN_UP)) {
-            appState.inspectedChannel = constrain(appState.inspectedChannel + 1, MIN_CHANNEL, MAX_CHANNEL);
+        int step = 1;
+        if (buttonManager.isPressedOrRepeat(BTN_UP, step)) {
+            appState.inspectedChannel = constrain(appState.inspectedChannel + step, MIN_CHANNEL, MAX_CHANNEL);
             appState.inspectedPeak = 0;
             needRedraw = true;
-        } else if (buttonManager.isPressed(BTN_DOWN)) {
-            appState.inspectedChannel = constrain(appState.inspectedChannel - 1, MIN_CHANNEL, MAX_CHANNEL);
+        } else if (buttonManager.isPressedOrRepeat(BTN_DOWN, step)) {
+            appState.inspectedChannel = constrain(appState.inspectedChannel - step, MIN_CHANNEL, MAX_CHANNEL);
             appState.inspectedPeak = 0;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
@@ -799,18 +1045,20 @@ void DisplayManager::processInput() {
     // -------------------------------------------------------------------------
     else if (appState.appMode == APP_MODE_SETTINGS) {
         if (buttonManager.isPressed(BTN_UP)) {
-            settingsSelection = (settingsSelection + 4) % 5;
+            settingsSelection = (settingsSelection + 6) % 7;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_DOWN)) {
-            settingsSelection = (settingsSelection + 1) % 5;
+            settingsSelection = (settingsSelection + 1) % 7;
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_A)) {
             if (settingsSelection == 0) {
                 appState.cyclePowerLevel(1);
                 radioManager.updatePALevel(appState.powerLevel);
                 cc1101Manager.updatePowerLevel();
+                showToast("POWER UPDATED", TOAST_SUCCESS);
             } else if (settingsSelection == 1) {
                 appState.cycleDwellTime(1);
+                showToast("DWELL UPDATED", TOAST_SUCCESS);
             } else if (settingsSelection == 2) {
                 appState.cycleDisplayTheme(1);
                 // Force one clean page rebuild so no pixels from the previous
@@ -818,14 +1066,55 @@ void DisplayManager::processInput() {
                 renderedMode = -1;
                 menuScrollOffset = prevMenuScrollOffset = 0;
                 mainMenuScrollOffset = subGhzMenuScrollOffset = 0;
+                showToast("THEME APPLIED", TOAST_SUCCESS);
             } else if (settingsSelection == 3 && storageManager.usingSd()) {
                 appState.saveSniffPacketsToSd = !appState.saveSniffPacketsToSd;
                 appState.markSettingsDirty();
+                showToast("SD SNIFF UPDATED", TOAST_SUCCESS);
             } else if (settingsSelection == 4) {
+                appState.analyzerAutoScale = !appState.analyzerAutoScale;
+                appState.markSettingsDirty();
+                showToast(appState.analyzerAutoScale ? "AUTO SCALE ON" : "FIXED SCALE 0-100", TOAST_INFO);
+            } else if (settingsSelection == 5) {
                 appState.cycleDisplayOrientation();
                 applyOrientation();
                 buttonManager.suppressHeldButtons();
+                showToast("ROTATION UPDATED", TOAST_SUCCESS);
+            } else if (settingsSelection == 6) {
+                appState.animationsEnabled = !appState.animationsEnabled;
+                appState.markSettingsDirty();
+                // Complete the current screen immediately using its final
+                // visual state when motion has just been disabled.
+                menuTransitionPhase = 3;
+                showToast(appState.animationsEnabled ? "ANIMATION ON" : "ANIMATION OFF",
+                          TOAST_INFO);
             }
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_B)) {
+            appState.appMode = APP_MODE_BAND_SELECT;
+            needRedraw = true;
+        }
+    }
+    else if (appState.appMode == APP_MODE_ANIMATION_SETTINGS) {
+        if (buttonManager.isPressed(BTN_UP)) {
+            animationSettingsSelection = (animationSettingsSelection + 4) % 5;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_DOWN)) {
+            animationSettingsSelection = (animationSettingsSelection + 1) % 5;
+            needRedraw = true;
+        } else if (buttonManager.isPressed(BTN_A)) {
+            if (animationSettingsSelection == 0)
+                appState.bootAnimationEnabled = !appState.bootAnimationEnabled;
+            else if (animationSettingsSelection == 1)
+                appState.menuAnimationEnabled = !appState.menuAnimationEnabled;
+            else if (animationSettingsSelection == 2)
+                appState.themeAnimationEnabled = !appState.themeAnimationEnabled;
+            else if (animationSettingsSelection == 3)
+                appState.activityAnimationEnabled = !appState.activityAnimationEnabled;
+            else
+                appState.animationSpeed = (appState.animationSpeed + 1) % 3;
+            appState.markSettingsDirty();
+            showToast("ANIMATION UPDATED", TOAST_SUCCESS);
             needRedraw = true;
         } else if (buttonManager.isPressed(BTN_B)) {
             appState.appMode = APP_MODE_BAND_SELECT;

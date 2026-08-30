@@ -5,6 +5,9 @@
 #include <FS.h>
 #include "config/Config.h"
 #include "core/AppState.h"
+#include "services/EventLog.h"
+#include "services/SessionRecorder.h"
+#include "ui/DisplaySupport.h"
 
 class DisplayManager {
 public:
@@ -26,9 +29,36 @@ public:
     void luaGuiLine(int x0, int y0, int x1, int y1, const char* color);
     void luaGuiRect(int x, int y, int width, int height, const char* color, bool filled);
     void luaGuiCircle(int x, int y, int radius, const char* color, bool filled);
+    void showToast(const char* message, DisplayUi::ToastType type = DisplayUi::TOAST_INFO, uint16_t durationMs = 1500);
+    void showActionableError(const char* title, const char* subtitle, const char* details);
+    void closeActionableError();
+    bool isErrorModalActive() const { return errorModalActive; }
+    void drawEmptyState(const char* title, const char* message, const char* actionA = nullptr, const char* actionB = "B: BACK");
 
 private:
     Adafruit_ST7735 tft;
+    // Toast state
+    char toastMessage[32] = {};
+    DisplayUi::ToastType toastType = DisplayUi::TOAST_INFO;
+    unsigned long toastStartMs = 0;
+    uint16_t toastDurationMs = 0;
+    bool toastActive = false;
+
+    // Actionable error modal state
+    bool errorModalActive = false;
+    bool errorModalShowingDetails = false;
+    String errorModalTitle;
+    String errorModalSubtitle;
+    String errorModalDetails;
+
+    // Feature screen states
+    size_t eventLogSelection = 0;
+    size_t eventLogScrollOffset = 0;
+    bool eventLogDetailOpen = false;
+    int sessionManagerSelection = 0;
+    int onboardingPage = 0;
+    String storageTestResult;
+    bool storageTesting = false;
     int menuSelection = 0;
     int menuPage = 0;
     int menuScrollOffset = 0;
@@ -59,8 +89,10 @@ private:
     uint8_t subGhzReplayFrame = 0;
     unsigned long lastSubGhzReplayFrameMs = 0;
     int settingsSelection = 0;
+    int animationSettingsSelection = 0;
     int statusPage = 0;
     int powerSelection = 0;
+    uint8_t dataMenuSelection = 0;
     uint8_t envEventScroll = 0;
     uint8_t envBandChannel = 42;
     uint8_t probeSelection = 0;
@@ -181,6 +213,8 @@ private:
     int previousSettingsTheme = -1;
     int previousSettingsSniffSave = -1;
     int previousSettingsOrientation = -1;
+    int previousSettingsScale = -1;
+    int previousSettingsAnimation = -1;
     int previousPowerSelection = -1;
     int previousSubPreset = -1;
     int previousSubRegion = -1;
@@ -227,12 +261,19 @@ private:
     void renderRadioDiagScreen();
     void renderProfilesScreen();
     void renderSettingsScreen();
+    void renderAnimationSettingsScreen();
     void renderStatusScreen();
     void renderPowerScreen();
     void renderRfEnvironmentScreen();
     void renderLuaScriptsScreen();
     void renderFileExplorerScreen();
     void renderPacketSnifferScreen();
+    void renderDataMenuScreen();
+    void renderSessionManagerScreen();
+    void renderSessionCompareScreen();
+    void renderStorageHealthScreen();
+    void renderEventLogScreen();
+    void renderOnboardingScreen();
     void renderVideoPlayer();
     void renderPhotoViewer();
     void renderRebootScreen();
@@ -249,10 +290,13 @@ private:
                             uint16_t background, uint16_t border);
     void redrawMenuItems(int oldSel, int newSel);
     void resetDynamicCaches();
-    void drawModernHeader(const char* title, uint16_t accent);
+    void drawModernHeader(const char* title, uint16_t accent, int page = 0, int totalPages = 0);
     void drawModernFooter(const char* left, const char* middle, const char* right);
     void drawFooterChip(int x, int width, const char* label);
     void drawThemeAnimation();
+    void drawToastOverlay();
+    void drawActionableErrorModal();
+    void drawStatusBar();
     void loadFileExplorerDirectory();
     bool openVideo(const String& path);
     void closeVideo();

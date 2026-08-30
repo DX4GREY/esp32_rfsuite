@@ -85,6 +85,8 @@ void ButtonManager::suppressHeldButtons() {
         holdStartTime[physicalIdx] = 0;
         holdReported[physicalIdx] = false;
         shortStartTime[physicalIdx] = 0;
+        pressStartTime[physicalIdx] = 0;
+        lastRepeatTime[physicalIdx] = 0;
     }
 }
 
@@ -97,6 +99,55 @@ bool ButtonManager::isPressed(int pin) {
     bool pressed = (prevState[idx] == HIGH && state == LOW);
     prevState[idx] = state;
     return pressed;
+}
+
+bool ButtonManager::isPressedOrRepeat(int pin, int& stepOut) {
+    int idx = getPinIndex(pin);
+    if (idx < 0) return false;
+
+    const int state = readButton(pin);
+    if (inputSuppressed(idx, state)) return false;
+    const unsigned long now = millis();
+
+    if (state == LOW) {
+        if (prevState[idx] == HIGH) {
+            // New press edge
+            prevState[idx] = LOW;
+            pressStartTime[idx] = now;
+            lastRepeatTime[idx] = now;
+            stepOut = 1;
+            return true;
+        }
+
+        // Button is held LOW
+        const unsigned long heldDuration = now - pressStartTime[idx];
+        if (heldDuration >= 1500) {
+            // Accelerate to step 10 after 1.5s, repeating every 80ms
+            if (now - lastRepeatTime[idx] >= 80) {
+                lastRepeatTime[idx] = now;
+                stepOut = 10;
+                return true;
+            }
+        } else if (heldDuration >= 500) {
+            // Accelerate to step 5 after 500ms, repeating every 150ms
+            if (now - lastRepeatTime[idx] >= 150) {
+                lastRepeatTime[idx] = now;
+                stepOut = 5;
+                return true;
+            }
+        }
+    } else {
+        // Button released
+        prevState[idx] = HIGH;
+        pressStartTime[idx] = 0;
+        lastRepeatTime[idx] = 0;
+    }
+    return false;
+}
+
+bool ButtonManager::isPressedOrRepeat(int pin) {
+    int step = 1;
+    return isPressedOrRepeat(pin, step);
 }
 
 bool ButtonManager::isLongPressed(int pin, unsigned long holdMs) {

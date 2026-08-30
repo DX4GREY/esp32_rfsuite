@@ -148,6 +148,11 @@ void setup() {
     subGhzRawService.setTriggerThreshold(appState.subGhzTriggerThreshold);
     subGhzRawService.setReplayRepeatCount(appState.subGhzReplayRepeats);
 
+    // If first boot, route user through onboarding guide (Requirement 18)
+    if (!appState.onboardingComplete) {
+        appState.appMode = APP_MODE_ONBOARDING;
+    }
+
     // 5. Initialize the main-loop deadline monitor (3.0s timeout). Avoid a
     // second Timer Group ISR alongside ESP-IDF's interrupt/task watchdogs.
     watchdog.init(WATCHDOG_TIMEOUT_US);
@@ -232,6 +237,9 @@ void loop() {
     if (appState.appMode == APP_MODE_REBOOT) {
         delay(1200); // give the reboot message time to be visible on screen
         Serial.println("REBOOTING SYSTEM...");
+        sessionRecorder.stop();
+        storageManager.prepareForRestart();
+        Serial.flush();
         ESP.restart();
     }
 
@@ -245,9 +253,13 @@ void loop() {
             // restart is preferable to corrupting IDLE0 and entering a panic
             // loop; the shutdown request is not persisted across reboot.
             Serial.println("SYSTEM SHUTDOWN: task stop timed out; restarting safely");
+            sessionRecorder.stop();
+            storageManager.prepareForRestart();
             Serial.flush();
             ESP.restart();
         }
+        sessionRecorder.stop();
+        storageManager.prepareForRestart();
         displayManager.prepareForShutdown();
         enterShutdownSleep();
     }
@@ -256,6 +268,9 @@ void loop() {
     if (watchdog.isTriggered()) {
         eventLog.error("watchdog", "main loop deadline exceeded");
         Serial.println("WATCHDOG TRIGGERED! Restarting ESP32...");
+        sessionRecorder.stop();
+        storageManager.prepareForRestart();
+        Serial.flush();
         ESP.restart();
     }
 }

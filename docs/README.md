@@ -1,6 +1,6 @@
-# RF Suite v2.0 Documentation
+# RF Suite Documentation
 
-This directory is the detailed technical and operating reference for RF24 Suite. The repository-level [README](../README.md) is the project overview; the documents below explain installation, hardware, operation, data formats, internals, and maintenance in depth.
+This directory is the detailed technical and operating reference for RF Suite. The repository-level [README](../README.md) is the project overview; the documents below explain installation, hardware, operation, data formats, internals, and maintenance in depth.
 
 ## Start here
 
@@ -15,6 +15,7 @@ This directory is the detailed technical and operating reference for RF24 Suite.
 | [Sub-GHz](SUB_GHZ.md) | CC1101 users | Analyzer, raw capture, modulation, replay UI, TX-region policy, compatibility, and limits |
 | [Lua Scripting](LUA_SCRIPTING.md) | Script authors | Editor library generation, SD layout, TFT loader, `rf` API, sandbox, design guidance, and examples |
 | [Serial CLI](SERIAL_CLI.md) | Operators and automation | Complete command reference with validation ranges and examples |
+| [v2.1.0 Release Notes](RELEASE_2.1.0.md) | Users and maintainers | UI/UX consistency, standardized footers, font rendering, and persistence fixes |
 | [v2.0.0 Release Notes](RELEASE_2.0.0.md) | Users and maintainers | Dual-band, CC1101, simulation, UI, safety, and compatibility summary |
 
 ## Engineering and maintenance

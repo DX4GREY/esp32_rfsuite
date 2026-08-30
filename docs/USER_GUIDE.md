@@ -1,5 +1,22 @@
 # User Guide
 
+## Navigation and UI feedback
+
+The global Main Menu includes a band-independent **DATA** entry. It opens
+Sessions, Storage Health, and Event Log without requiring an nRF24 or CC1101
+selection. Headers show the current hierarchy plus compact R1/R2, SD/LittleFS,
+recording, and RX/TX/SIM state. Page counters are shown on paged screens.
+
+Short toast messages confirm completed actions. Storage and recording failures
+open a detail dialog where `A` toggles technical details and `B` closes it.
+Empty lists explain the missing prerequisite and show the available next action.
+
+On supported channel, value, and list controls, holding `UP` or `DOWN`
+accelerates from steps of 1 to 5 after roughly 500 ms and 10 after roughly
+1.5 seconds. Spectrum changes its footer when frozen and displays LOW DATA,
+GOOD, or HIGH CONF according to sampling confidence. Settings → Graph Scale
+switches between fixed `0–100` and adaptive scaling.
+
 ## Main menu
 
 The original RF Suite boot animation presents travelling spectrum bins, a
@@ -243,7 +260,23 @@ Use `UP/DOWN` to select and `A` to advance the value.
 | TX Dwell | Preset microsecond values | Applied to nRF24 hopping and the CC1101 RF Test sweep |
 | UI Theme | CYBER, OCEAN, AMBER, MATRIX, VIOLET, ICE, FLIPPER, RETRO, TERMINAL, NEON | Controls colors, menu layout, geometry, and animation |
 | Sniff to SD | OFF, SD CARD | Controls nRF24 packet-sniffer saving when an SD card is mounted |
+| Graph Scale | AUTO, 0-100 | Selects adaptive or fixed analyzer graph scaling |
 | Orientation | LANDSCAPE, PORTRAIT, LANDSCAPE FLIP, PORTRAIT FLIP | Rotates the display in 90-degree steps and rotates all four button functions to match |
+| Animation | ON, OFF | Enables decorative splash and menu-focus motion globally; operational progress remains visible |
+
+When **Animation** is ON, an **ANIMATION** item appears on Main Menu page 2.
+Its controls are:
+
+| Animation control | Values | Effect |
+|---|---|---|
+| Boot Splash | ON, OFF | Animated or short static startup identity |
+| Menu Focus | ON, OFF | Four-frame focus transitions in Grid/List menus |
+| Theme FX | ON, OFF | Periodic theme decoration in the header |
+| Activity FX | ON, OFF | Decorative motion on active/restart screens; status and progress remain visible |
+| Speed | SLOW, NORMAL, FAST | Scales timing for enabled animation groups |
+
+Turning the master setting OFF hides this submenu and bypasses every decorative
+animation group without deleting their individual choices.
 
 Menu View is no longer separate. OCEAN, MATRIX, ICE, and TERMINAL use a List
 layout; the other profiles use Grid. Themes also own their card silhouette,
@@ -263,7 +296,8 @@ selection marker, header symbol, footer geometry, and motion language:
 | NEON | Grid | Double-outline cards, split headers, and orbit animation |
 
 Theme animation is paused during timing-sensitive Sub-GHz record, replay, and
-RF Test operations.
+RF Test operations. Setting **Animation** to OFF also skips decorative boot and
+menu-focus frames, while leaving progress and active-operation indicators on.
 
 Moving between items uses a four-frame focus transition. The destination card
 changes from its idle border into the theme-specific marker over roughly 48 ms;

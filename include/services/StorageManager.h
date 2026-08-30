@@ -20,13 +20,24 @@ public:
     uint64_t sdTotalBytes() const;
     uint64_t sdUsedBytes() const;
     uint64_t sdFreeBytes() const;
+    uint64_t flashTotalBytes() const;
+    uint64_t flashUsedBytes() const;
+    uint64_t flashFreeBytes() const;
+    bool retrySd();
+    void prepareForRestart();
+    bool benchmarkTest(String& resultSummary);
+    const char* lastError() const { return lastErrorMsg; }
 
 private:
+    bool mountSd(bool resetSpiBus, bool extendedRecovery);
+    bool validateMountedSd(uint32_t mountedFrequency);
+    void recoverSdBus(bool resetSpiBus, uint32_t settleMs);
     bool ensureDirectory(fs::FS& fs, const char* path);
     bool sdMounted = false;
     bool sdWritable = false;
     bool flashMounted = false;
     const char* sdState = "not initialized";
+    const char* lastErrorMsg = "NONE";
 };
 
 extern StorageManager storageManager;

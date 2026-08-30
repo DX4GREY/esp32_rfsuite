@@ -6,6 +6,7 @@
 #include "services/SessionRecorder.h"
 #include "services/StorageManager.h"
 #include "services/SubGhzRawService.h"
+#include "services/EventLog.h"
 
 using namespace DisplayUi;
 
@@ -25,8 +26,8 @@ String formatStorageBytes(uint64_t bytes) {
 
 void DisplayManager::renderSettingsScreen() {
     if (!settingsLayoutDrawn) {
-        drawModernHeader("APP SETTINGS", SPECTRUM_HIGH);
-        drawModernFooter("U/D SEL", "A NEXT", "B BACK");
+        drawModernHeader("SETTINGS", SPECTRUM_HIGH);
+        drawModernFooter("U/D SEL", "A CHANGE", "B BACK");
         settingsLayoutDrawn = true;
     }
 
@@ -35,15 +36,15 @@ void DisplayManager::renderSettingsScreen() {
         const bool selected = settingsSelection == item;
         const uint16_t background = selected ?
                                     SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
-        tft.fillRect(5, y, 150, 15, ST77XX_BLACK);
-        drawThemedMenuCard(5, y, 150, 15, selected, true, background,
+        tft.fillRect(5, y, 150, 12, ST77XX_BLACK);
+        drawThemedMenuCard(5, y, 150, 12, selected, true, background,
                            selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER);
-        tft.setCursor(15, y + 4);
+        tft.setCursor(15, y + 2);
         tft.setTextColor(selected ? SPECTRUM_ACCENT : ST77XX_GRAY,
                          background);
         tft.print(label);
         const int valueX = 148 - static_cast<int>(strlen(value)) * 6;
-        tft.setCursor(valueX, y + 4);
+        tft.setCursor(valueX, y + 2);
         tft.setTextColor(valueColor, background);
         tft.print(value);
     };
@@ -55,26 +56,33 @@ void DisplayManager::renderSettingsScreen() {
     else pwrColor = SPECTRUM_LOW;
     const int theme = static_cast<int>(appState.displayTheme);
     const int orientation = appState.displayRotation;
+    const int scaleMode = appState.analyzerAutoScale ? 1 : 0;
     const int sniffState = !storageManager.usingSd() ? -1 : (appState.saveSniffPacketsToSd ? 1 : 0);
+    const int animationState = appState.animationsEnabled ? 1 : 0;
     auto dirtyRow = [&](int row) {
         return previousSettingsSelection < 0 || previousSettingsTheme != theme ||
                previousSettingsSelection == row ||
                settingsSelection == row;
     };
     if (dirtyRow(0) || previousPowerLevel != static_cast<int>(appState.powerLevel))
-        drawSettingRow(0, 18, "TX POWER", appState.getPowerLevelName(), pwrColor);
+        drawSettingRow(0, 16, "TX POWER", appState.getPowerLevelName(), pwrColor);
     if (dirtyRow(1) || previousDwellTimeUs != appState.dwellTimeUs)
-        drawSettingRow(1, 36, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
+        drawSettingRow(1, 28, "TX DWELL", appState.getDwellTimeName(), SPECTRUM_ACCENT);
     if (dirtyRow(2) || previousSettingsTheme != theme)
-        drawSettingRow(2, 54, "UI THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
+        drawSettingRow(2, 40, "UI THEME", appState.getDisplayThemeName(), SPECTRUM_ACCENT);
     const char* sniffSave = !storageManager.usingSd() ? "NO SD" :
                             (appState.saveSniffPacketsToSd ? "SD CARD" : "OFF");
     const uint16_t sniffColor = !storageManager.usingSd() ? SPECTRUM_CRITICAL :
                                   (appState.saveSniffPacketsToSd ? SPECTRUM_LOW : ST77XX_GRAY);
     if (dirtyRow(3) || previousSettingsSniffSave != sniffState)
-        drawSettingRow(3, 72, "SNIFF TO SD", sniffSave, sniffColor);
-    if (dirtyRow(4) || previousSettingsOrientation != orientation)
-        drawSettingRow(4, 90, "ORIENTATION", appState.getDisplayOrientationName(), SPECTRUM_ACCENT);
+        drawSettingRow(3, 52, "SNIFF TO SD", sniffSave, sniffColor);
+    if (dirtyRow(4) || previousSettingsScale != scaleMode)
+        drawSettingRow(4, 64, "GRAPH SCALE", appState.analyzerAutoScale ? "AUTO" : "0-100", SPECTRUM_ACCENT);
+    if (dirtyRow(5) || previousSettingsOrientation != orientation)
+        drawSettingRow(5, 76, "ORIENTATION", appState.getDisplayOrientationName(), SPECTRUM_ACCENT);
+    if (dirtyRow(6) || previousSettingsAnimation != animationState)
+        drawSettingRow(6, 88, "ANIMATION", appState.animationsEnabled ? "ON" : "OFF",
+                       appState.animationsEnabled ? SPECTRUM_LOW : ST77XX_GRAY);
 
     previousSettingsSelection = settingsSelection;
     previousPowerLevel = static_cast<int>(appState.powerLevel);
@@ -82,6 +90,38 @@ void DisplayManager::renderSettingsScreen() {
     previousSettingsTheme = theme;
     previousSettingsSniffSave = sniffState;
     previousSettingsOrientation = orientation;
+    previousSettingsScale = scaleMode;
+    previousSettingsAnimation = animationState;
+}
+
+void DisplayManager::renderAnimationSettingsScreen() {
+    drawModernHeader("ANIMATION", SPECTRUM_ACCENT);
+    drawModernFooter("U/D SEL", "A CHANGE", "B BACK");
+
+    const char* labels[] = {"BOOT SPLASH", "MENU FOCUS", "THEME FX", "ACTIVITY FX", "SPEED"};
+    const char* values[] = {
+        appState.bootAnimationEnabled ? "ON" : "OFF",
+        appState.menuAnimationEnabled ? "ON" : "OFF",
+        appState.themeAnimationEnabled ? "ON" : "OFF",
+        appState.activityAnimationEnabled ? "ON" : "OFF",
+        appState.getAnimationSpeedName()
+    };
+    for (int row = 0; row < 5; ++row) {
+        const int y = 18 + row * 17;
+        const bool selected = animationSettingsSelection == row;
+        const uint16_t bg = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
+        tft.fillRect(5, y, 150, 15, ST77XX_BLACK);
+        drawThemedMenuCard(5, y, 150, 15, selected, true, bg,
+                           selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER);
+        tft.setCursor(14, y + 4);
+        tft.setTextColor(selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg);
+        tft.print(labels[row]);
+        const int valueX = 148 - static_cast<int>(strlen(values[row])) * 6;
+        tft.setCursor(valueX, y + 4);
+        tft.setTextColor(row < 4 && values[row][0] == 'O' && values[row][1] == 'F' ?
+                         ST77XX_GRAY : SPECTRUM_LOW, bg);
+        tft.print(values[row]);
+    }
 }
 
 // =============================================================================
@@ -200,7 +240,7 @@ void DisplayManager::renderStatusScreen() {
         tft.print("/6");
         tft.fillRoundRect(5, 17, 150, 86, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
-        drawModernFooter("U/D PAGE", "A REF", "B BACK");
+        drawModernFooter("U/D PAGE", "A REFRESH", "B BACK");
         for (int row = 0; row < 6; row++) previousStatusValues[row] = "";
     }
 
@@ -233,8 +273,8 @@ void DisplayManager::renderStatusScreen() {
 // =============================================================================
 void DisplayManager::renderPowerScreen() {
     if (!powerLayoutDrawn) {
-        drawModernHeader("POWER OPTIONS", SPECTRUM_HIGH);
-        drawModernFooter("U/D SEL", "A OK", "B BACK");
+        drawModernHeader("POWER", SPECTRUM_HIGH);
+        drawModernFooter("U/D SEL", "A SELECT", "B BACK");
         powerLayoutDrawn = true;
     }
 
@@ -306,7 +346,8 @@ void DisplayManager::renderRebootScreen() {
         needRedraw = false;
     }
     String dotProgReboot = "REBOOTING";
-    int dots = (millis() / 250) % 4;
+    int dots = appState.animationsEnabled && appState.activityAnimationEnabled ?
+               (millis() / appState.scaledAnimationDelay(250)) % 4 : 0;
     for (int d = 0; d < dots; d++) {
         dotProgReboot += ".";
     }
@@ -319,5 +360,291 @@ void DisplayManager::renderRebootScreen() {
 }
 
 // =============================================================================
-// UPDATE UI DISPATCHER
+// STORAGE HEALTH SCREEN (Requirement 10)
 // =============================================================================
+void DisplayManager::renderStorageHealthScreen() {
+    drawModernHeader("STORAGE", SPECTRUM_ACCENT);
+
+    tft.fillRoundRect(4, 16, 152, 88, 4, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(4, 16, 152, 88, 4, SPECTRUM_BORDER);
+
+    const bool sdMounted = storageManager.usingSd();
+    const char* sdStatusStr = storageManager.sdStatus();
+
+    // Row 0: SD Card Status
+    tft.setCursor(8, 20);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("SD CARD  :");
+    tft.setCursor(76, 20);
+    uint16_t sdColor = sdMounted ? SPECTRUM_LOW : (storageManager.sdDetected() ? SPECTRUM_HIGH : SPECTRUM_CRITICAL);
+    tft.setTextColor(sdColor, SPECTRUM_CARD_BG);
+    tft.print(sdStatusStr);
+
+    // Row 1: Active Recorder Backend
+    tft.setCursor(8, 32);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("RECORDER :");
+    tft.setCursor(76, 32);
+    tft.setTextColor(sdMounted ? SPECTRUM_LOW : SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+    tft.print(storageManager.backendName());
+    if (!sdMounted) tft.print(" (LFS)");
+
+    // Row 2: SD Card Free / Total
+    tft.setCursor(8, 44);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("SD FREE  :");
+    tft.setCursor(76, 44);
+    tft.setTextColor(sdMounted ? ST77XX_WHITE : ST77XX_GRAY, SPECTRUM_CARD_BG);
+    if (sdMounted) {
+        tft.print(formatStorageBytes(storageManager.sdFreeBytes()));
+    } else {
+        tft.print("--");
+    }
+
+    // Row 3: LittleFS Free Space
+    tft.setCursor(8, 56);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("LFS FREE :");
+    tft.setCursor(76, 56);
+    tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+    tft.print(formatStorageBytes(storageManager.flashFreeBytes()));
+
+    // Row 4: Card Type
+    tft.setCursor(8, 68);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("TYPE     :");
+    tft.setCursor(76, 68);
+    tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+    tft.print(storageManager.sdTypeName());
+
+    // Row 5: Last test/error result
+    tft.setCursor(8, 80);
+    tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+    tft.print("BENCH    :");
+    tft.setCursor(76, 80);
+    if (storageTestResult.length() > 0) {
+        uint16_t resColor = storageTestResult.startsWith("SD W") ? SPECTRUM_LOW : SPECTRUM_CRITICAL;
+        tft.setTextColor(resColor, SPECTRUM_CARD_BG);
+        tft.print(storageTestResult);
+    } else {
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print("HOLD A TO RUN");
+    }
+
+    drawModernFooter("A RETRY", "HOLD A", "B BACK");
+    needRedraw = false;
+}
+
+// =============================================================================
+// EVENT LOG SCREEN (Requirement 11)
+// =============================================================================
+void DisplayManager::renderEventLogScreen() {
+    drawModernHeader("EVENT LOG", SPECTRUM_ACCENT);
+
+    const size_t total = eventLog.countEntries();
+    if (total == 0) {
+        drawEmptyState("NO EVENTS", "System log is empty.", "", "B BACK");
+        needRedraw = false;
+        return;
+    }
+
+    tft.fillRoundRect(4, 16, 152, 88, 4, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(4, 16, 152, 88, 4, SPECTRUM_BORDER);
+
+    LogEntry entries[6];
+    const size_t count = eventLog.getEntries(entries, 6, eventLogScrollOffset);
+
+    for (size_t i = 0; i < 6; ++i) {
+        const int y = 18 + i * 14;
+        const size_t itemIdx = eventLogScrollOffset + i;
+        const bool isSelected = (itemIdx == eventLogSelection);
+
+        if (i < count) {
+            const auto& entry = entries[i];
+            const uint16_t rowBg = isSelected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
+            tft.fillRect(6, y, 148, 13, rowBg);
+            if (isSelected) {
+                tft.drawRoundRect(6, y, 148, 13, 2, SPECTRUM_ACCENT);
+            }
+
+            // Timestamp mm:ss
+            unsigned long sec = entry.timestampMs / 1000UL;
+            char timeBuf[8];
+            snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu", (sec / 60UL) % 100UL, sec % 60UL);
+            tft.setCursor(8, y + 3);
+            tft.setTextColor(ST77XX_GRAY, rowBg);
+            tft.print(timeBuf);
+
+            // Level
+            uint16_t lvlColor = ST77XX_WHITE;
+            if (strcmp(entry.level, "ERROR") == 0 || strcmp(entry.level, "ERR") == 0) lvlColor = SPECTRUM_CRITICAL;
+            else if (strcmp(entry.level, "WARN") == 0) lvlColor = SPECTRUM_HIGH;
+            else if (strcmp(entry.level, "INFO") == 0) lvlColor = SPECTRUM_LOW;
+
+            tft.setCursor(44, y + 3);
+            tft.setTextColor(lvlColor, rowBg);
+            tft.print(entry.level);
+
+            // Message / Source
+            tft.setCursor(76, y + 3);
+            tft.setTextColor(isSelected ? ST77XX_WHITE : ST77XX_GRAY, rowBg);
+            char shortMsg[15] = {};
+            snprintf(shortMsg, sizeof(shortMsg), "%s", entry.message);
+            tft.print(shortMsg);
+        } else {
+            tft.fillRect(6, y, 148, 13, SPECTRUM_CARD_BG);
+        }
+    }
+
+    if (eventLogDetailOpen && count > 0) {
+        size_t relIdx = eventLogSelection >= eventLogScrollOffset ? eventLogSelection - eventLogScrollOffset : 0;
+        if (relIdx < count) {
+            const auto& entry = entries[relIdx];
+            tft.fillRoundRect(8, 20, 144, 80, 4, SPECTRUM_HEADER_BG);
+            tft.drawRoundRect(8, 20, 144, 80, 4, SPECTRUM_ACCENT);
+
+            tft.setCursor(14, 24);
+            tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+            tft.print("EVENT DETAIL");
+
+            tft.setCursor(14, 38);
+            tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+            tft.print("TIME  : ");
+            tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
+            tft.printf("%lums (%lus ago)", entry.timestampMs, (millis() - entry.timestampMs) / 1000UL);
+
+            tft.setCursor(14, 49);
+            tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+            tft.print("LEVEL : ");
+            tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_HEADER_BG);
+            tft.print(entry.level);
+
+            tft.setCursor(14, 60);
+            tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+            tft.print("SRC   : ");
+            tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
+            tft.print(entry.source);
+
+            tft.setCursor(14, 71);
+            tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
+            tft.print("MSG   : ");
+            tft.setTextColor(SPECTRUM_LOW, SPECTRUM_HEADER_BG);
+            tft.print(entry.message);
+
+            tft.setCursor(14, 84);
+            tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+            tft.print("A/B: CLOSE DETAIL");
+        }
+    }
+
+    drawModernFooter("U/D SEL", "A DETAIL", "B BACK");
+    needRedraw = false;
+}
+
+// =============================================================================
+// ONBOARDING SCREEN (Requirement 18)
+// =============================================================================
+void DisplayManager::renderOnboardingScreen() {
+    drawModernHeader("ONBOARDING", SPECTRUM_ACCENT, onboardingPage + 1, 3);
+
+    tft.fillRoundRect(4, 16, 152, 88, 5, SPECTRUM_CARD_BG);
+    tft.drawRoundRect(4, 16, 152, 88, 5, SPECTRUM_BORDER);
+
+    if (onboardingPage == 0) {
+        // Page 1: RF MEASUREMENTS (CARRIER HIT % - NOT dBm)
+        tft.fillRoundRect(6, 18, 148, 14, 3, SPECTRUM_HEADER_BG);
+        tft.setCursor(12, 21);
+        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_HEADER_BG);
+        tft.print("1. RF MEASUREMENTS");
+
+        tft.setCursor(8, 36);
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print("Values are CARRIER-HIT %");
+
+        tft.setCursor(8, 48);
+        tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
+        tft.print("* NOT calibrated dBm *");
+
+        tft.setCursor(8, 60);
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print("Reflects relative channel");
+
+        tft.setCursor(8, 72);
+        tft.print("occupancy & interference.");
+
+        tft.fillRoundRect(12, 85, 136, 14, 2, DISPLAY_ACTIVE_BG);
+        tft.setCursor(18, 88);
+        tft.setTextColor(SPECTRUM_ACCENT, DISPLAY_ACTIVE_BG);
+        tft.print("HIT RATIO % ONLY");
+
+        drawModernFooter("A NEXT", "", "B SKIP");
+    } else if (onboardingPage == 1) {
+        // Page 2: 4-BUTTON CONTROLS
+        tft.fillRoundRect(6, 18, 148, 14, 3, SPECTRUM_HEADER_BG);
+        tft.setCursor(12, 21);
+        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_HEADER_BG);
+        tft.print("2. 4-BUTTON CONTROLS");
+
+        tft.setCursor(8, 36);
+        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+        tft.print("UP/DN :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Nav / Values (x1)");
+
+        tft.setCursor(8, 48);
+        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+        tft.print("HOLD  :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Fast Step (x5/x10)");
+
+        tft.setCursor(8, 60);
+        tft.setTextColor(SPECTRUM_LOW, SPECTRUM_CARD_BG);
+        tft.print("BTN A :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Select / Action");
+
+        tft.setCursor(8, 72);
+        tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
+        tft.print("BTN B :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Back / Cancel");
+
+        tft.setCursor(8, 84);
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print("HOLD A/B : Advanced ops");
+
+        drawModernFooter("A NEXT", "", "B PREV");
+    } else {
+        // Page 3: OPERATION MODES
+        tft.fillRoundRect(6, 18, 148, 14, 3, SPECTRUM_HEADER_BG);
+        tft.setCursor(12, 21);
+        tft.setTextColor(SPECTRUM_LOW, SPECTRUM_HEADER_BG);
+        tft.print("3. OPERATION MODES");
+
+        tft.setCursor(8, 36);
+        tft.setTextColor(SPECTRUM_LOW, SPECTRUM_CARD_BG);
+        tft.print("RX-ONLY :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Safe RF scan");
+
+        tft.setCursor(8, 48);
+        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_CARD_BG);
+        tft.print("SIM     :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Demo without RF");
+
+        tft.setCursor(8, 60);
+        tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_CARD_BG);
+        tft.print("RF-LAB  :");
+        tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        tft.print(" Authorized lab");
+
+        tft.setCursor(8, 74);
+        tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.print("Bands   : 2.4GHz & Sub-G");
+
+        drawModernFooter("A DONE", "", "B PREV");
+    }
+
+    needRedraw = false;
+}
