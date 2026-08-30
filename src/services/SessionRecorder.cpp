@@ -3,6 +3,8 @@
 #include "core/RfEnvironmentState.h"
 #include "drivers/RadioManager.h"
 #include "services/StorageManager.h"
+#include "services/EventLog.h"
+#include "core/SessionFormat.h"
 
 SessionRecorder sessionRecorder;
 
@@ -24,12 +26,33 @@ bool SessionRecorder::start() {
         return false;
     }
     fs::FS& fs = storageManager.filesystem();
-    fs.remove(storageManager.sessionPath());
-    File file = fs.open(storageManager.sessionPath(), FILE_WRITE);
-    if (!file) {
-        errorMessage = "cannot create session";
+    const char* current = storageManager.sessionPath();
+    const char* previous = previousPath();
+    const String backup = String(previous) + ".bak";
+    fs.remove(backup);
+    const bool hadCurrent = fs.exists(current);
+    const bool hadPrevious = fs.exists(previous);
+    if (hadCurrent && hadPrevious && !fs.rename(previous, backup)) {
+        errorMessage = "cannot stage previous session";
+        eventLog.error("session", errorMessage);
         return false;
     }
+    const bool archived = hadCurrent && fs.rename(current, previous);
+    if (hadCurrent && !archived) {
+        if (hadPrevious) fs.rename(backup, previous);
+        errorMessage = "cannot archive previous session";
+        eventLog.error("session", errorMessage);
+        return false;
+    }
+    File file = fs.open(storageManager.sessionPath(), FILE_WRITE);
+    if (!file) {
+        if (archived) fs.rename(previous, current);
+        if (hadPrevious) fs.rename(backup, previous);
+        errorMessage = "cannot create session";
+        eventLog.error("session", errorMessage);
+        return false;
+    }
+    fs.remove(backup);
     file.println("# RF24 analyzer session v1");
     file.println("# ACTIVITY values are carrier-hit percentages, not dBm");
     file.printf("# firmware_build=%s compiled=%s %s\n", RF_LAB_TX_ENABLED ? "authorized_rf_lab" : "analyzer", __DATE__, __TIME__);
@@ -37,67 +60,84 @@ bool SessionRecorder::start() {
     file.println("# P: type,ms,channel,pa,data_rate,payload_size,packets,interval_ms,duration_ms");
     file.println("type,ms,sweep,peak_ch,peak_pct,confidence,band,mode,trace,ch0..ch125");
     file.close();
-    pending.reserve(4096);
-    pending = "";
+    pendingLength = 0;
+    pending[0] = '\0';
     sweepCount = 0;
     lastFlushMs = millis();
     recording = true;
     errorMessage = "none";
+    eventLog.info("session", archived ? "recording started; previous archived" : "recording started");
     return true;
 }
 
 void SessionRecorder::stop() {
     flushPending();
+    if (recording) eventLog.info("session", "recording stopped");
     recording = false;
 }
 
 bool SessionRecorder::flushPending() {
-    if (!ready || pending.length() == 0) return ready;
+    if (!ready || pendingLength == 0) return ready;
     File file = storageManager.filesystem().open(storageManager.sessionPath(), FILE_APPEND);
     if (!file) {
         errorMessage = "session append failed";
         recording = false;
+        eventLog.error("session", errorMessage);
         return false;
     }
-    const size_t written = file.print(pending);
+    const size_t written = file.write(reinterpret_cast<const uint8_t*>(pending), pendingLength);
     file.close();
-    if (written != pending.length()) {
+    if (written != pendingLength) {
         errorMessage = "short filesystem write";
         recording = false;
+        eventLog.error("session", errorMessage);
         return false;
     }
-    pending = "";
+    pendingLength = 0;
+    pending[0] = '\0';
     lastFlushMs = millis();
     return true;
 }
 
 void SessionRecorder::service() {
-    if (recording && pending.length() > 0 &&
+    if (recording && pendingLength > 0 &&
         millis() - lastFlushMs >= FLUSH_INTERVAL_MS) flushPending();
 }
 
 void SessionRecorder::recordSweep(const AppState& state) {
     if (!recording) return;
-    if (fileSize() + pending.length() >= MAX_SESSION_BYTES) {
+    if (fileSize() + pendingLength + 640 >= MAX_SESSION_BYTES) {
         errorMessage = "session size limit reached";
+        eventLog.warn("session", errorMessage);
         stop();
         return;
     }
-
-    String line;
-    line.reserve(560);
-    line = "S," + String(millis()) + "," + String(state.surveySweeps) + "," +
-           String(state.peakChannel) + "," + String(state.peakLevel) + "," +
-           String(state.analyzerConfidence) + "," + String(state.analyzerBand) + "," +
-           String(state.analyzerRadioMode) + "," + String(state.analyzerTraceMode);
+    char line[640];
+    int used = snprintf(line, sizeof(line), "S,%lu,%lu,%u,%u,%u,%u,%u,%u",
+                        static_cast<unsigned long>(millis()),
+                        static_cast<unsigned long>(state.surveySweeps), state.peakChannel,
+                        state.peakLevel, state.analyzerConfidence, state.analyzerBand,
+                        state.analyzerRadioMode, state.analyzerTraceMode);
+    if (used < 0 || static_cast<size_t>(used) >= sizeof(line)) return;
     for (int ch = 0; ch < TOTAL_CHANNELS; ch++) {
-        line += ',';
-        line += String(state.spectrumLevels[ch]);
+        const int added = snprintf(line + used, sizeof(line) - used, ",%u", state.spectrumLevels[ch]);
+        if (added < 0 || static_cast<size_t>(added) >= sizeof(line) - used) {
+            errorMessage = "sweep formatting overflow"; recording = false; return;
+        }
+        used += added;
     }
-    line += '\n';
-    pending += line;
+    line[used++] = '\n';
+    if (!appendPending(line, used)) return;
     sweepCount++;
-    if (pending.length() >= FLUSH_THRESHOLD) flushPending();
+    if (pendingLength >= FLUSH_THRESHOLD) flushPending();
+}
+
+bool SessionRecorder::appendPending(const char* data, size_t length) {
+    if (length > PENDING_CAPACITY) { errorMessage = "record too large"; recording = false; return false; }
+    if (pendingLength + length > PENDING_CAPACITY && !flushPending()) return false;
+    memcpy(pending + pendingLength, data, length);
+    pendingLength += length;
+    return true;
 }
 
 void SessionRecorder::recordEnvironmentSummary(const RfEnvironmentState& state, const char* testType) {
@@ -111,10 +151,10 @@ void SessionRecorder::recordEnvironmentSummary(const RfEnvironmentState& state, 
         String(state.averageOccupancy())+","+String(top[0])+","+
         String(state.channels[top[0]].peak)+","+String(state.overallScore())+","+String(bursts);
     for(int i=0;i<5;i++){line+=',';line+=String(top[i]);line+=':';line+=String(state.channels[top[i]].movingAverage);} line+='\n';
-    pending += line; if(pending.length()>=FLUSH_THRESHOLD) flushPending();
+    appendPending(line.c_str(), line.length()); if(pendingLength>=FLUSH_THRESHOLD) flushPending();
 }
 void SessionRecorder::recordProbeSummary(uint8_t channel,uint8_t pa,uint8_t rate,uint8_t size,uint16_t packets,uint16_t intervalMs,uint32_t durationMs){
-    if(!recording)return;pending += "P,"+String(millis())+","+String(channel)+","+String(pa)+","+String(rate)+","+String(size)+","+String(packets)+","+String(intervalMs)+","+String(durationMs)+"\n";
+    if(!recording)return; char line[128]; const int length=snprintf(line,sizeof(line),"P,%lu,%u,%u,%u,%u,%u,%u,%lu\n",static_cast<unsigned long>(millis()),channel,pa,rate,size,packets,intervalMs,static_cast<unsigned long>(durationMs)); if(length>0&&static_cast<size_t>(length)<sizeof(line))appendPending(line,length);
 }
 
 bool SessionRecorder::exportCsv(Stream& output) {
@@ -142,26 +182,64 @@ bool SessionRecorder::replayLatest(AppState& state) {
     file.close();
     if (lastData.length() == 0) return false;
 
-    int start = 0;
-    int field = 0;
-    int channel = 0;
-    while (start <= static_cast<int>(lastData.length())) {
-        int comma = lastData.indexOf(',', start);
-        if (comma < 0) comma = lastData.length();
-        const String value = lastData.substring(start, comma);
-        if (field == 3) state.peakChannel = value.toInt();
-        else if (field == 4) state.peakLevel = constrain(value.toInt(), 0, 100);
-        else if (field == 5) state.analyzerConfidence = constrain(value.toInt(), 0, 100);
-        else if (field >= 9 && channel < TOTAL_CHANNELS) {
-            state.spectrumLevels[channel++] = constrain(value.toInt(), 0, 100);
-        }
-        field++;
-        start = comma + 1;
-        if (comma >= static_cast<int>(lastData.length())) break;
+    SessionFormat::Sweep parsed;
+    if (!SessionFormat::parseSweepLine(lastData.c_str(), parsed)) {
+        errorMessage = "invalid session row"; return false;
     }
+    state.peakChannel = parsed.peakChannel;
+    state.peakLevel = parsed.peakLevel;
+    state.analyzerConfidence = parsed.confidence;
+    memcpy(state.spectrumLevels, parsed.levels, TOTAL_CHANNELS);
     state.analyzerFrozen = true;
     state.cursorChannel = state.peakChannel;
-    return channel == TOTAL_CHANNELS;
+    return true;
+}
+
+const char* SessionRecorder::previousPath() const {
+    return storageManager.usingSd() ? "/RFSuite/log/rf_session_previous.csv" : "/rf_session_previous.csv";
+}
+
+bool SessionRecorder::summarize(const char* filePath, uint32_t& sweeps,
+                                uint8_t& peakChannel, uint8_t& average) {
+    File file = storageManager.filesystem().open(filePath, FILE_READ);
+    if (!file) return false;
+    uint64_t totals[TOTAL_CHANNELS] = {};
+    sweeps = 0;
+    String line;
+    while (file.available()) {
+        line = file.readStringUntil('\n');
+        if (!line.startsWith("S,")) continue;
+        SessionFormat::Sweep parsed;
+        if (!SessionFormat::parseSweepLine(line.c_str(), parsed)) continue;
+        for (size_t channel = 0; channel < TOTAL_CHANNELS; ++channel) totals[channel] += parsed.levels[channel];
+        ++sweeps;
+        yield();
+    }
+    file.close();
+    if (!sweeps) return false;
+    uint64_t grandTotal = 0, best = 0;
+    peakChannel = 0;
+    for (size_t channel = 0; channel < TOTAL_CHANNELS; ++channel) {
+        grandTotal += totals[channel];
+        if (totals[channel] > best) { best = totals[channel]; peakChannel = channel; }
+    }
+    average = static_cast<uint8_t>(grandTotal / (static_cast<uint64_t>(sweeps) * TOTAL_CHANNELS));
+    return true;
+}
+
+bool SessionRecorder::compareWithPrevious(SessionComparison& result) {
+    flushPending();
+    SessionComparison compared{};
+    if (!summarize(previousPath(), compared.previousSweeps, compared.previousPeakChannel,
+                   compared.previousAverage) ||
+        !summarize(storageManager.sessionPath(), compared.currentSweeps,
+                   compared.currentPeakChannel, compared.currentAverage)) {
+        errorMessage = "two valid sessions required";
+        return false;
+    }
+    compared.averageDelta = static_cast<int16_t>(compared.currentAverage) - compared.previousAverage;
+    result = compared;
+    return true;
 }
 
 size_t SessionRecorder::fileSize() const {

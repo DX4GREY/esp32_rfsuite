@@ -26,11 +26,13 @@
 #include "ui/DisplayManager.h"
 #include "services/SerialCommander.h"
 #include "services/SessionRecorder.h"
+#include "services/StorageManager.h"
 #include "services/PerformanceMonitor.h"
 #include "services/RfEnvironmentAnalyzer.h"
 #include "services/RfAuthorizedProbe.h"
 #include "services/LuaEngine.h"
 #include "services/SubGhzRawService.h"
+#include "services/EventLog.h"
 
 static constexpr unsigned long WAKE_HOLD_MS = 1500;
 
@@ -111,6 +113,9 @@ void setup() {
     if (!sessionRecorder.begin()) {
         Serial.println("Session recorder unavailable: " + String(sessionRecorder.lastError()));
     }
+    eventLog.begin();
+    if (storageManager.sdDetected() && !storageManager.sdUsable())
+        eventLog.warn("storage", storageManager.sdStatus());
 
     // 3b. Initialize TFT after the SD card has entered SPI mode. Both devices
     // continue sharing HSPI safely through independent chip-select pins.
@@ -130,10 +135,12 @@ void setup() {
         // Keep the UI, status, storage, and Serial diagnostics available. A
         // disconnected module can then be diagnosed without a reboot loop.
         Serial.println("No radio detected; continuing in diagnostics-only mode.");
+        eventLog.warn("nrf24", "no radio detected");
     }
 
     if (!cc1101Manager.init()) {
         Serial.println("CC1101 unavailable: " + String(cc1101Manager.lastError()));
+        eventLog.warn("cc1101", cc1101Manager.lastError());
     }
     cc1101Manager.setPreset(static_cast<Cc1101Preset>(appState.subGhzRadioPreset));
     subGhzRawService.setRegion(static_cast<SubGhzRegion>(appState.subGhzRegion));
@@ -247,6 +254,7 @@ void loop() {
 
     // 6. Auto-recovery on Watchdog Timeout
     if (watchdog.isTriggered()) {
+        eventLog.error("watchdog", "main loop deadline exceeded");
         Serial.println("WATCHDOG TRIGGERED! Restarting ESP32...");
         ESP.restart();
     }

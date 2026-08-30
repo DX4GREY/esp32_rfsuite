@@ -10,8 +10,11 @@ public:
     const char* sessionPath() const;
     const char* scriptsPath() const { return "/RFSuite/scripts"; }
     const char* subGhzPath() const { return "/RFSuite/SubGHz"; }
-    bool usingSd() const { return sdMounted; }
-    const char* backendName() const { return sdMounted ? "SD" : "LittleFS"; }
+    bool usingSd() const { return sdWritable; }
+    bool sdDetected() const { return sdMounted; }
+    bool sdUsable() const { return sdWritable; }
+    bool flashUsable() const { return flashMounted; }
+    const char* backendName() const { return sdWritable ? "SD" : "LittleFS"; }
     const char* sdStatus() const { return sdState; }
     const char* sdTypeName() const;
     uint64_t sdTotalBytes() const;
@@ -21,6 +24,7 @@ public:
 private:
     bool ensureDirectory(fs::FS& fs, const char* path);
     bool sdMounted = false;
+    bool sdWritable = false;
     bool flashMounted = false;
     const char* sdState = "not initialized";
 };

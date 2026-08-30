@@ -5,6 +5,9 @@
 #include "drivers/Cc1101Manager.h"
 #include "core/AppState.h"
 #include "services/StorageManager.h"
+#include "services/EventLog.h"
+#include "core/Crc32.h"
+#include "core/RfrFormat.h"
 
 SubGhzRawService subGhzRawService;
 volatile uint32_t SubGhzRawService::durations[MAX_PULSES] = {};
@@ -13,14 +16,6 @@ volatile uint32_t SubGhzRawService::lastEdgeUs = 0;
 volatile uint8_t SubGhzRawService::firstLevel = 0;
 
 namespace {
-struct __attribute__((packed)) RawHeader {
-    char magic[4];
-    uint32_t frequencyHz;
-    uint32_t pulseCount;
-    uint8_t firstLevel;
-    uint8_t reserved[3];
-};
-
 constexpr float RF_PRESETS[] = {315.0f, 433.92f, 868.0f, 915.0f};
 constexpr float ANALYZER_FREQUENCIES[] = {
     300.0f, 315.0f, 330.0f, 345.0f,
@@ -30,6 +25,51 @@ constexpr float ANALYZER_FREQUENCIES[] = {
 };
 uint32_t importBuffer[8192];
 uint8_t customPresetBuffer[96];
+
+struct RawMetadata {
+    uint32_t frequencyHz = 0;
+    uint32_t pulseCount = 0;
+    uint8_t firstLevel = 0;
+    uint8_t preset = 0;
+    uint8_t region = 0;
+    bool hasCrc = false;
+    uint32_t crc = 0;
+};
+
+bool readRawMetadata(File& file, RawMetadata& metadata) {
+    char magic[4];
+    if (file.read(reinterpret_cast<uint8_t*>(magic), sizeof(magic)) != sizeof(magic)) return false;
+    file.seek(0);
+    if (RfrFormat::isV2(magic)) {
+        RfrFormat::HeaderV2 header{};
+        if (file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header)) return false;
+        metadata.frequencyHz = header.frequencyHz;
+        metadata.pulseCount = header.pulseCount;
+        metadata.firstLevel = header.firstLevel;
+        metadata.preset = header.preset;
+        metadata.region = header.region;
+        metadata.hasCrc = true;
+        metadata.crc = header.payloadCrc32;
+    } else if (RfrFormat::isV1(magic)) {
+        RfrFormat::HeaderV1 header{};
+        if (file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header)) return false;
+        metadata.frequencyHz = header.frequencyHz;
+        metadata.pulseCount = header.pulseCount;
+        metadata.firstLevel = header.firstLevel;
+        metadata.preset = header.reserved[0];
+        metadata.region = header.reserved[1];
+        metadata.hasCrc = false;
+        metadata.crc = 0;
+    } else return false;
+    return RfrFormat::validMetadata(metadata.frequencyHz, metadata.pulseCount, 8192) &&
+           metadata.firstLevel <= 1;
+}
+
+bool readAndValidatePulses(File& file, const RawMetadata& metadata) {
+    const size_t bytes = metadata.pulseCount * sizeof(uint32_t);
+    if (file.read(reinterpret_cast<uint8_t*>(importBuffer), bytes) != bytes) return false;
+    return !metadata.hasCrc || Crc32::calculate(importBuffer, bytes) == metadata.crc;
+}
 
 Cc1101Preset presetFromName(const String& value) {
     if (value.indexOf("Ook270") >= 0) return Cc1101Preset::OOK_270;
@@ -163,11 +203,19 @@ bool SubGhzRawService::stopRecording() {
                  String(millis()) + ".rfr";
     File file = storageManager.filesystem().open(activeFile, FILE_WRITE);
     if (!file) { error = "FILE OPEN FAILED"; activeFile = ""; return false; }
-    RawHeader header{{'R','F','S','1'},
-                     static_cast<uint32_t>(recordingFrequency * 1000000.0f),
-                     count, firstLevel,
-                     {static_cast<uint8_t>(cc1101Manager.preset()),
-                      static_cast<uint8_t>(activeRegion), 0}};
+    uint32_t crc = Crc32::begin();
+    for (uint32_t offset = 0; offset < count; offset += 256) {
+        const uint32_t chunk = min<uint32_t>(256, count - offset);
+        uint32_t copy[256];
+        noInterrupts();
+        for (uint32_t i = 0; i < chunk; ++i) copy[i] = durations[offset + i];
+        interrupts();
+        crc = Crc32::update(crc, reinterpret_cast<const uint8_t*>(copy), chunk * sizeof(uint32_t));
+    }
+    RfrFormat::HeaderV2 header{{'R','F','S','2'},
+        static_cast<uint32_t>(recordingFrequency * 1000000.0f), count, firstLevel,
+        static_cast<uint8_t>(cc1101Manager.preset()), static_cast<uint8_t>(activeRegion),
+        0, Crc32::finish(crc)};
     bool ok = file.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header)) == sizeof(header);
     for (uint32_t offset = 0; ok && offset < count; offset += 256) {
         const uint32_t chunk = min<uint32_t>(256, count - offset);
@@ -179,7 +227,9 @@ bool SubGhzRawService::stopRecording() {
              chunk * sizeof(uint32_t);
     }
     file.close();
+    if (!ok) storageManager.filesystem().remove(activeFile);
     error = ok ? "SAVED" : "WRITE FAILED";
+    if (!ok) eventLog.error("subghz", error);
     return ok;
 }
 
@@ -433,14 +483,13 @@ bool SubGhzRawService::cleanFile(const String& name) {
     if (!name.endsWith(".rfr")) { error = "CLEAN SUPPORTS RFR"; return false; }
     const String path = String(storageManager.subGhzPath()) + "/" + name;
     File file = storageManager.filesystem().open(path, FILE_READ);
-    RawHeader header{};
-    if (!file || file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header) ||
-        memcmp(header.magic, "RFS1", 4) || header.pulseCount > MAX_PULSES) {
+    RawMetadata header{};
+    if (!file || !readRawMetadata(file, header)) {
         if (file) file.close(); error = "INVALID RAW FILE"; return false;
     }
-    const size_t bytes = header.pulseCount * sizeof(uint32_t);
-    if (file.read(reinterpret_cast<uint8_t*>(importBuffer), bytes) != bytes) {
-        file.close(); error = "READ FAILED"; return false;
+    if (!readAndValidatePulses(file, header)) {
+        file.close(); error = header.hasCrc ? "CRC MISMATCH" : "READ FAILED";
+        eventLog.warn("subghz", error); return false;
     }
     file.close();
     uint32_t read = importBuffer[0] > 20000 ? 1 : 0, write = 0;
@@ -451,11 +500,14 @@ bool SubGhzRawService::cleanFile(const String& name) {
         } else importBuffer[write++] = importBuffer[read++];
     }
     header.pulseCount = write;
+    RfrFormat::HeaderV2 outputHeader{{'R','F','S','2'}, header.frequencyHz, write,
+        header.firstLevel, header.preset, header.region, 0,
+        Crc32::calculate(importBuffer, write * sizeof(uint32_t))};
     const String tempPath = path + ".tmp";
     storageManager.filesystem().remove(tempPath);
     file = storageManager.filesystem().open(tempPath, FILE_WRITE);
     const bool ok = file &&
-        file.write(reinterpret_cast<uint8_t*>(&header), sizeof(header)) == sizeof(header) &&
+        file.write(reinterpret_cast<uint8_t*>(&outputHeader), sizeof(outputHeader)) == sizeof(outputHeader) &&
         file.write(reinterpret_cast<uint8_t*>(importBuffer), write * sizeof(uint32_t)) ==
             write * sizeof(uint32_t);
     if (file) file.close();
@@ -471,9 +523,8 @@ bool SubGhzRawService::exportSubFile(const String& name) {
     if (!name.endsWith(".rfr")) { error = "EXPORT SUPPORTS RFR"; return false; }
     const String base = String(storageManager.subGhzPath()) + "/" + name;
     File input = storageManager.filesystem().open(base, FILE_READ);
-    RawHeader header{};
-    if (!input || input.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header) ||
-        memcmp(header.magic, "RFS1", 4)) {
+    RawMetadata header{};
+    if (!input || !readRawMetadata(input, header) || !readAndValidatePulses(input, header)) {
         if (input) input.close(); error = "INVALID RAW FILE"; return false;
     }
     String outputPath = base.substring(0, base.length() - 4) + ".sub";
@@ -482,14 +533,13 @@ bool SubGhzRawService::exportSubFile(const String& name) {
     output.println("Filetype: Flipper SubGhz RAW File");
     output.println("Version: 1");
     output.println("Frequency: " + String(header.frequencyHz));
-    const Cc1101Preset preset = header.reserved[0] < static_cast<uint8_t>(Cc1101Preset::COUNT) ?
-        static_cast<Cc1101Preset>(header.reserved[0]) : Cc1101Preset::OOK_650;
+    const Cc1101Preset preset = header.preset < static_cast<uint8_t>(Cc1101Preset::COUNT) ?
+        static_cast<Cc1101Preset>(header.preset) : Cc1101Preset::OOK_650;
     output.println("Preset: " + String(flipperPreset(preset)));
     output.println("Protocol: RAW");
     const uint32_t start = header.firstLevel ? 0 : 1;
     for (uint32_t i = 0; i < header.pulseCount; ++i) {
-        uint32_t duration = 0;
-        if (input.read(reinterpret_cast<uint8_t*>(&duration), 4) != 4) break;
+        const uint32_t duration = importBuffer[i];
         if (i < start) continue;
         const uint32_t exported = i - start;
         if (exported % 128 == 0) output.print("RAW_Data:");
@@ -596,18 +646,17 @@ bool SubGhzRawService::replay(const String& name, void (*yieldCb)()) {
             }
         }
     } else {
-        RawHeader header{};
-        if (file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header) ||
-            memcmp(header.magic, "RFS1", 4) || header.pulseCount > MAX_PULSES) {
+        RawMetadata header{};
+        if (!readRawMetadata(file, header)) {
             file.close(); error = "INVALID RAW FILE"; return false;
         }
         frequencyHz = header.frequencyHz; pulseTotal = header.pulseCount;
         initialLevel = header.firstLevel;
-        if (header.reserved[0] < static_cast<uint8_t>(Cc1101Preset::COUNT))
-            preset = static_cast<Cc1101Preset>(header.reserved[0]);
-        const size_t bytes = pulseTotal * sizeof(uint32_t);
-        if (file.read(reinterpret_cast<uint8_t*>(importBuffer), bytes) != bytes) {
-            file.close(); error = "READ FAILED"; return false;
+        if (header.preset < static_cast<uint8_t>(Cc1101Preset::COUNT))
+            preset = static_cast<Cc1101Preset>(header.preset);
+        if (!readAndValidatePulses(file, header)) {
+            file.close(); error = header.hasCrc ? "CRC MISMATCH" : "READ FAILED";
+            eventLog.warn("subghz", error); return false;
         }
     }
     file.close();

@@ -2,6 +2,7 @@
 #include <Preferences.h>
 #include "core/RfEnvironmentState.h"
 #include "core/RfEnvironmentMath.h"
+#include "core/SettingsValidation.h"
 
 namespace {
 constexpr uint8_t SETTINGS_SCHEMA_VERSION = 8;
@@ -30,8 +31,8 @@ void AppState::loadSettings() {
     customSpectrumSamples = constrain(prefs.getInt("custom", 40), 10, 100);
 
     const uint8_t storedTheme = prefs.getUChar("theme", DISPLAY_THEME_CYBER);
-    displayTheme = storedTheme < DISPLAY_THEME_COUNT ?
-                   static_cast<DisplayThemeId>(storedTheme) : DISPLAY_THEME_CYBER;
+    displayTheme = static_cast<DisplayThemeId>(SettingsValidation::enumOrDefault(
+        storedTheme, DISPLAY_THEME_COUNT, DISPLAY_THEME_CYBER));
 
     if (storedSchema >= 2) {
         const uint8_t storedTrace = prefs.getUChar("trace", ANALYZER_TRACE_LIVE);
@@ -88,7 +89,7 @@ void AppState::loadSettings() {
         subGhzAutoTrigger = prefs.getBool("sub_trig", true);
         subGhzTriggerThreshold = constrain(static_cast<int>(prefs.getChar("sub_thr", -80)), -90, -70);
         const uint8_t repeats = prefs.getUChar("sub_rep", 1);
-        subGhzReplayRepeats = repeats >= 5 ? 5 : (repeats >= 3 ? 3 : 1);
+        subGhzReplayRepeats = SettingsValidation::replayRepeats(repeats);
     }
     if (storedSchema >= 8) {
         displayRotation = constrain(prefs.getUChar("display_rot", 3), 0, 3);

@@ -10,6 +10,7 @@
 #include "services/RfAuthorizedProbe.h"
 #include "services/LuaEngine.h"
 #include "services/StorageManager.h"
+#include "services/EventLog.h"
 
 namespace {
 bool parseIntStrict(const String& text, int& value) {
@@ -176,6 +177,16 @@ void SerialCommander::executeCommand(String cmd) {
                 appState.appMode = APP_MODE_ANALYZER_SPECTRUM;
                 Serial.println("Last recorded sweep loaded and frozen.");
             } else Serial.println("No replayable session available.");
+        } else if (action == "compare") {
+            SessionComparison comparison;
+            if (sessionRecorder.compareWithPrevious(comparison)) {
+                Serial.printf("Session comparison: previous=%lu sweeps avg=%u%% peak=CH%u; current=%lu sweeps avg=%u%% peak=CH%u; delta=%+d points\n",
+                              static_cast<unsigned long>(comparison.previousSweeps),
+                              comparison.previousAverage, comparison.previousPeakChannel,
+                              static_cast<unsigned long>(comparison.currentSweeps),
+                              comparison.currentAverage, comparison.currentPeakChannel,
+                              comparison.averageDelta);
+            } else Serial.println("Comparison unavailable: " + String(sessionRecorder.lastError()));
         } else {
             Serial.printf("Session: %s, %lu sweeps, %u bytes, storage=%s, path=%s, error=%s\n",
                           sessionRecorder.isRecording() ? "RECORDING" : "STOPPED",
@@ -184,6 +195,14 @@ void SerialCommander::executeCommand(String cmd) {
                           sessionRecorder.storageName(), sessionRecorder.path(),
                           sessionRecorder.lastError());
         }
+    }
+    else if (lowerCmd == "events" || lowerCmd == "events export") {
+        Serial.println("--- EVENT LOG BEGIN ---");
+        if (!eventLog.exportTo(Serial)) Serial.println("Event log unavailable.");
+        Serial.println("--- EVENT LOG END ---");
+    }
+    else if (lowerCmd == "events clear confirm") {
+        Serial.println(eventLog.clear() ? "Event log cleared." : "Event log clear failed.");
     }
     else if (lowerCmd == "lua" || lowerCmd == "lua list") {
         luaEngine.list(Serial);
@@ -360,7 +379,8 @@ void SerialCommander::printHelp() {
     Serial.println("baseline      - Capture baseline and select delta trace");
     Serial.println("max clear     - Clear maximum history");
     Serial.println("event <key> <value> - threshold/hysteresis/duration/channels");
-    Serial.println("session <start|stop|info|export|replay> - SD recorder (LittleFS fallback)");
+    Serial.println("session <start|stop|info|export|replay|compare> - recorder and two-session comparison");
+    Serial.println("events [export] | events clear confirm - Persistent diagnostic log");
     Serial.println("lua <list|run NAME> - Run sandboxed /RFSuite/scripts/*.lua");
     Serial.println("perf          - Runtime scan/UI/SPI timing diagnostics");
     Serial.println("env help      - RF Environment Test commands");

@@ -5,7 +5,8 @@
 | Data | Location | Survives reboot | Notes |
 |---|---|---:|---|
 | User configuration | NVS namespace `appstate` | Yes | Versioned schema and deferred writes |
-| Latest recorded session | SD `/RFSuite/log/rf_session.csv`, LittleFS fallback `/rf_session.csv` | Yes | Replaced when a new session starts |
+| Current and previous sessions | SD `/RFSuite/log/rf_session*.csv`, LittleFS fallback `/rf_session*.csv` | Yes | Two generations retained for comparison |
+| Diagnostic event log | Active backend `events.csv` | Yes | 16 KiB rotating CSV plus one previous generation |
 | Sub-GHz raw captures | SD `/RFSuite/SubGHz/*.rfr` | Yes | One file per completed CC1101 raw capture |
 | Flipper RAW interchange | SD `/RFSuite/SubGHz/*.sub` | Yes | Imported directly or exported from `.rfr` |
 | Lua application log | SD `/RFSuite/log/lua.log` | Yes | Appended by `rf.log()` |
@@ -46,7 +47,7 @@ Start from Analyze → Logging with `A`, or over Serial:
 session start
 ```
 
-Starting recording removes the previous session CSV on the active storage backend and creates a new v1 header. Stop with `A` on the Logging page or:
+Starting recording transactionally moves the current CSV to `rf_session_previous.csv` and creates a new v1 session. If staging or creation fails, the earlier files are restored. Stop with `A` on the Logging page or:
 
 ```text
 session stop
@@ -56,7 +57,7 @@ Stopping flushes pending data. Leaving the Logging page does not stop an active 
 
 ## Buffering and limits
 
-- Pending text reserves approximately 4 KiB of heap.
+- Pending sweep text uses a fixed 4 KiB buffer rather than repeated heap allocations.
 - A flush occurs at 3,072 pending bytes or after about two seconds.
 - The session stops when persisted plus pending data reaches approximately 256 KiB.
 - A storage error stops recording and is available through `session info`.
@@ -167,6 +168,20 @@ session replay
 Replay stops radio activity and recording, finds the last complete `S` row, loads its peak, confidence, and 126 live levels, opens Spectrum, and freezes acquisition.
 
 Replay does not animate the entire session and does not restore the recorded band, radio mode, or trace enum. It is a last-sweep inspection feature.
+
+## Session comparison
+
+`session compare` summarizes the current and previous session, reporting sweep
+counts, average activity, strongest average channel, and the signed average
+change. Malformed or truncated sweep rows are ignored; both files must contain
+at least one valid complete sweep.
+
+## Persistent diagnostic events
+
+Boots, missing radios, recorder failures/limits, CRC failures, and watchdog
+recovery are appended to `events.csv`. The file rotates at approximately 16 KiB.
+Use `events export` to inspect it and `events clear confirm` to clear both
+generations.
 
 ## Meaning of `SESSION STOPPED`
 

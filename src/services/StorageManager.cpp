@@ -78,6 +78,7 @@ bool StorageManager::begin() {
         delay(10);
     }
     sdState = sdMounted ? "mounted" : "not detected";
+    sdWritable = false;
     if (sdMounted) {
         Serial.printf("Storage: SD SPI=%lu Hz, physical=%llu, volume=%llu bytes\n",
                       static_cast<unsigned long>(mountedFrequency),
@@ -85,27 +86,34 @@ bool StorageManager::begin() {
         if (SD.totalBytes() == 0) {
             sdState = "filesystem error";
             Serial.println("Storage: FAT volume metadata cannot be read");
-        }
-        if (!ensureDirectory(SD, "/RFSuite/log") ||
+        } else if (!ensureDirectory(SD, "/RFSuite/log") ||
             !ensureDirectory(SD, "/RFSuite/scripts") ||
             !ensureDirectory(SD, "/RFSuite/SubGHz")) {
-            // Keep a successfully mounted card available for read-only tasks
-            // such as File Explorer and loading existing Lua scripts. A card
-            // with a damaged/read-only FAT volume may reject mkdir(), but
-            // unmounting it here incorrectly turns that into "not ready" and
-            // hides files that can still be read.
+            // Preserve physical-card diagnostics, but route application writes
+            // to LittleFS when the expected directory tree is unavailable.
             sdState = "directory error";
             Serial.println("Storage: SD mounted, but RFSuite folders could not be created");
+        } else {
+            const char* probePath = "/RFSuite/log/.write_test";
+            SD.remove(probePath);
+            File probe = SD.open(probePath, FILE_WRITE);
+            if (probe && probe.write(static_cast<uint8_t>(0xA5)) == 1) {
+                probe.close();
+                sdWritable = SD.remove(probePath);
+            } else if (probe) {
+                probe.close();
+            }
+            if (!sdWritable) sdState = "read only";
         }
     }
 
     // Keep flash available as a transparent recorder fallback.
     flashMounted = LittleFS.begin(true);
     Serial.printf("Storage: %s%s\n", backendName(),
-                  sdMounted && strcmp(sdState, "mounted") == 0
+                  sdWritable
                       ? " mounted at /RFSuite"
-                      : (sdMounted ? " mounted with directory error" : " fallback"));
-    return sdMounted || flashMounted;
+                      : (sdMounted ? " fallback (SD degraded)" : " fallback"));
+    return sdWritable || flashMounted;
 }
 
 const char* StorageManager::sdTypeName() const {
@@ -127,9 +135,9 @@ uint64_t StorageManager::sdFreeBytes() const {
 }
 
 fs::FS& StorageManager::filesystem() {
-    return sdMounted ? static_cast<fs::FS&>(SD) : static_cast<fs::FS&>(LittleFS);
+    return sdWritable ? static_cast<fs::FS&>(SD) : static_cast<fs::FS&>(LittleFS);
 }
 
 const char* StorageManager::sessionPath() const {
-    return sdMounted ? "/RFSuite/log/rf_session.csv" : "/rf_session.csv";
+    return sdWritable ? "/RFSuite/log/rf_session.csv" : "/rf_session.csv";
 }

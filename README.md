@@ -40,7 +40,8 @@ The interface is designed for a 160 × 128 landscape display. It uses partial/di
   channel comparison, relative interference scoring, before/after snapshots,
   and protocol-band hints.
 - RF event detector with configurable threshold, hysteresis, duration, and multi-channel criteria.
-- Buffered LittleFS session recorder (256 KiB cap), USB CSV summary, export, and last-sweep replay.
+- Buffered SD/LittleFS session recorder (256 KiB cap), two-session archive/comparison, USB CSV export, and last-sweep replay.
+- Rotating persistent diagnostic event log and SD write-health fallback.
 - Experimental passive nRF24 raw-payload sniffer with selectable channel and
   1/2 Mbps rate, live hexadecimal preview, and Serial dump.
 - `FAST`, `BALANCED`, `DEEP`, and `CUSTOM` analyzer profiles.
@@ -327,8 +328,9 @@ The selected profile and CUSTOM sample count are stored in NVS.
 
 At boot, the firmware mounts the TFT microSD slot and creates `/RFSuite/log/`
 and `/RFSuite/scripts/`. Open `Analyze → Logging` to start a new session. On SD,
-the previous `/RFSuite/log/rf_session.csv` is replaced. If no usable card is
-present, recording transparently falls back to LittleFS `/rf_session.csv`.
+the current `/RFSuite/log/rf_session.csv` is archived as
+`rf_session_previous.csv`. If no writable card is present, recording
+transparently falls back to LittleFS `/rf_session.csv`.
 
 Lua 5.1 scripts (maximum 32 KiB) can be placed in `/RFSuite/scripts/`, listed
 with `lua list`, and executed with `lua run NAME`. The sandbox exposes 2.4 GHz
@@ -352,7 +354,7 @@ Example:
 RFLOG,18240,57,37,73,Wi-Fi (1-73),FAST,LIVE,65
 ```
 
-The recorder flushes in batches to reduce flash churn and stops at approximately 256 KiB. Use `session export` to stream the stored CSV or `session replay` to load and freeze its most recent complete sweep. Recording state is not restored after reboot.
+The recorder flushes in batches to reduce flash churn and stops at approximately 256 KiB. Use `session export` to stream the stored CSV, `session replay` to load its most recent complete sweep, or `session compare` to compare it with the archived session. Recording state is not restored after reboot.
 
 ## System Status
 
@@ -423,9 +425,11 @@ The command interface runs at 115200 baud.
 | `event hysteresis <0-threshold>` | Set the release margin |
 | `event duration <1-20>` | Set minimum consecutive sweeps |
 | `event channels <1-16>` | Require simultaneous qualifying channels |
-| `session start\|stop\|info` | Control or inspect LittleFS recording |
+| `session start\|stop\|info` | Control or inspect SD/LittleFS recording |
 | `session export` | Stream the stored full-sweep CSV |
 | `session replay` | Load and freeze the last stored sweep |
+| `session compare` | Compare current and previous session summaries |
+| `events export` | Stream the persistent diagnostic event log |
 | `perf` | Print scan, UI, loop, and SPI mutex timings |
 | `factory reset confirm` | Restore NVS defaults and reboot |
 | `power` / `pwr` | Show the current RF power |

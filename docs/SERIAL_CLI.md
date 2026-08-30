@@ -17,6 +17,8 @@ pio device monitor --baud 115200
 | `config` or `settings` | Print stored configuration and compile-time build mode |
 | `stop` | Stop all radio activity |
 | `perf` | Print sweep/UI/loop timing and SPI mutex metrics |
+| `events export` | Stream the persistent rotating diagnostic log |
+| `events clear confirm` | Clear both diagnostic-log generations |
 | `factory reset confirm` | Clear NVS settings, restore defaults, and reboot |
 
 Factory reset does not delete `/rf_session.csv` from LittleFS.
@@ -58,10 +60,11 @@ Changing any event parameter clears per-channel run counters and releases the ev
 | Command | Behavior |
 |---|---|
 | `session` or `session info` | Print recorder state, sweep count, file size, and last error |
-| `session start` | Replace the previous file and start recording |
+| `session start` | Archive the current session transactionally and start recording |
 | `session stop` | Flush pending data and stop |
 | `session export` | Flush and stream the complete CSV between marker lines |
 | `session replay` | Stop recording/radios and freeze the last stored sweep on Spectrum |
+| `session compare` | Compare average activity and strongest channel of current vs previous session |
 
 Unknown `session` actions currently fall back to the information output.
 

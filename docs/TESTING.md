@@ -15,6 +15,9 @@ The current `test_analyzer_math` suite covers:
 - non-negative baseline delta;
 - confidence ordering and upper bound;
 - event run retention and release through hysteresis.
+- strict complete-sweep CSV parsing and malformed/overflow rejection;
+- settings-value canonicalization and bounds;
+- CRC32 and RFS1/RFS2 metadata validation.
 
 Native tests intentionally avoid Arduino, RF24, TFT, FreeRTOS, Preferences, and LittleFS dependencies.
 
@@ -46,6 +49,9 @@ CI proves compilation and pure-logic behavior, not hardware correctness.
 - Existing NVS settings load and invalid values fall back safely.
 - Legacy settings migrate once without repeated writes.
 - LittleFS mounts and a session can be created, stopped, exported, and replayed.
+- Starting a second session preserves the prior file and `session compare` reports both.
+- An unusable/read-only SD falls back to LittleFS and reports its degraded state.
+- A modified RFS2 payload is rejected with `CRC MISMATCH`; legacy RFS1 remains readable.
 - Session automatically stops near its size limit and reports the reason.
 
 ### Radios

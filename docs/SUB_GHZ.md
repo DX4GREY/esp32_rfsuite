@@ -74,8 +74,11 @@ Native captures are stored as:
 /RFSuite/SubGHz/RAW_<frequency>_<time>.rfr
 ```
 
-An `.rfr` file stores frequency, pulse count, initial level, CC1101 preset, and
-raw pulse durations. It does not store an analog copy of the RF waveform.
+New `.rfr` files use the `RFS2` format and store frequency, pulse count,
+initial level, CC1101 preset, region, raw pulse durations, and a CRC32 over the
+pulse data. Corrupt or truncated payloads are rejected before cleaning, export,
+or replay. Legacy `RFS1` files remain readable and are upgraded to `RFS2` when
+cleaned. The format does not store an analog copy of the RF waveform.
 
 ## Modulation and presets
 
