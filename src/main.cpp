@@ -104,17 +104,21 @@ void setup() {
     // 2. Initialize Navigation Buttons (Pull-Up)
     buttonManager.init();
 
-    // 3. Initialize TFT ST7735 1.8" Display (160x128 Compact)
-    displayManager.init();
-
-    // 3b. Show splash screen before entering the menu
-    displayManager.showSplash();
-
-    // 3c. Mount storage after TFT initialization. Both devices use the same
-    // HSPI controller and shared SCK/MOSI lines with independent CS pins.
+    // 3. Mount the SD card before initializing the TFT. Combo TFT/microSD
+    // modules share a bus and some variants will not answer CMD0 reliably
+    // after the display controller has already received its init sequence.
+    // StorageManager keeps TFT_CS high while probing the card.
     if (!sessionRecorder.begin()) {
         Serial.println("Session recorder unavailable: " + String(sessionRecorder.lastError()));
     }
+
+    // 3b. Initialize TFT after the SD card has entered SPI mode. Both devices
+    // continue sharing HSPI safely through independent chip-select pins.
+    displayManager.init();
+
+    // 3c. Show splash screen before entering the menu.
+    displayManager.showSplash();
+
     if (!luaEngine.begin()) Serial.println("Lua: " + String(luaEngine.lastError()));
 
     // 4. Initialize nRF24L01+ Radio (init() retries internally before failing)

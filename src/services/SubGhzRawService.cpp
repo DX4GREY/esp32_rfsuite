@@ -69,6 +69,7 @@ void IRAM_ATTR SubGhzRawService::edgeIsr() {
 
 bool SubGhzRawService::startRecording(float frequencyMHz) {
     if (recording) return true;
+    captureAutoCompleted = false;
     if (simulation) {
         recordingFrequency = frequencyMHz; capturedCount = 0; firstLevel = 1;
         liveRssi = noiseFloor = -96; peakRssi = -96; pulseRate = 0;
@@ -211,6 +212,18 @@ void SubGhzRawService::service() {
         const uint32_t current = capturedCount;
         pulseRate = min<uint32_t>(65535, current - lastPulseRateCount);
         lastPulseRateCount = current; lastPulseRateMs = millis();
+    }
+    // Flipper-style SubRead completes once a received burst has gone quiet.
+    // Keep manual captures (auto trigger disabled) under explicit user control.
+    // A minimum pulse count rejects isolated noise edges and the 400 ms guard
+    // comfortably spans the short gaps normally found between repeated frames.
+    if (!simulation && recording && autoTrigger && !armed && capturedCount >= 16) {
+        uint32_t edgeUs;
+        noInterrupts(); edgeUs = lastEdgeUs; interrupts();
+        if (static_cast<uint32_t>(micros() - edgeUs) >= 400000UL) {
+            captureAutoCompleted = true;
+            stopRecording();
+        }
     }
     if (recording && !armed && (capturedCount >= MAX_PULSES || elapsedMs() >= 30000)) stopRecording();
 

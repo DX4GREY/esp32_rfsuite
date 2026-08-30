@@ -22,6 +22,7 @@ public:
     bool isArmed() const { return armed; }
     void setAutoTrigger(bool enabled) { autoTrigger = enabled; }
     bool autoTriggerEnabled() const { return autoTrigger; }
+    bool autoCompleted() const { return captureAutoCompleted; }
     int16_t liveRssiDbm() const { return liveRssi; }
     int16_t peakRssiDbm() const { return peakRssi; }
     int16_t noiseFloorDbm() const { return noiseFloor; }
@@ -106,6 +107,7 @@ private:
     bool simulation = false;
     bool armed = false;
     bool autoTrigger = true;
+    bool captureAutoCompleted = false;
     bool abortReplay = false;
     uint32_t replayProgressPulse = 0;
     uint32_t replayProgressTotal = 0;

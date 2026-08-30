@@ -21,20 +21,66 @@ bool StorageManager::ensureDirectory(fs::FS& fs, const char* path) {
 }
 
 bool StorageManager::begin() {
+    // The TFT and SD socket share SCK/MOSI.  Explicitly release both chip
+    // selects before touching the bus; some ST7735 breakout boards otherwise
+    // leave MISO polluted while the card is answering CMD0/CMD8.
+    pinMode(TFT_CS, OUTPUT);
+    digitalWrite(TFT_CS, HIGH);
     pinMode(SD_CS_PIN, OUTPUT);
     digitalWrite(SD_CS_PIN, HIGH);
+    // SD cards release DO/MISO while CS is high. Some inexpensive combo
+    // boards omit the required pull-up, leaving ESP32-S3 to read random LOW
+    // bits before CMD0. The internal pull-up is sufficient for this idle line
+    // and is automatically overridden whenever the card drives a response.
+    pinMode(SD_MISO_PIN, INPUT_PULLUP);
+
+    // A regulator and level shifter are commonly fitted between the combo
+    // board supply and its microSD socket. Give that rail enough time to
+    // stabilize before the first 400 kHz initialization clocks.
+    delay(250);
+    Serial.printf("Storage: SPI pins SCK=%d MOSI=%d MISO=%d CS=%d, MISO idle=%s\n",
+                  SD_SCK_PIN, SD_MOSI_PIN, SD_MISO_PIN, SD_CS_PIN,
+                  digitalRead(SD_MISO_PIN) == HIGH ? "HIGH" : "LOW");
+
     SPIClass& sharedSpi = displayStorageSpi();
     sharedSpi.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
-    // 4 MHz is deliberately conservative for TFT carrier boards: their SD
-    // traces, level shifters, and shared SCK/MOSI wiring are often unreliable
-    // at 10 MHz even though the card-identification commands still succeed.
-    sdMounted = SD.begin(SD_CS_PIN, sharedSpi, SD_SPI_FREQUENCY,
-                         "/sd", 8, false) &&
-                SD.cardType() != CARD_NONE && SD.cardSize() > 0;
+
+    // Long breakout traces and resistor level shifters can make a card fail at
+    // 4 MHz even though the same wiring is reliable at 1 MHz. Retry cleanly at
+    // progressively safer clocks instead of permanently reporting no card.
+    // cardSize() is intentionally not a detection condition: it may be zero
+    // for an unreadable FAT volume even when the physical card was detected.
+    const uint32_t mountFrequencies[] = {SD_SPI_FREQUENCY, 1000000U, 400000U};
+    uint32_t mountedFrequency = 0;
+    sdMounted = false;
+    delay(10);
+    for (size_t attempt = 0;
+         attempt < sizeof(mountFrequencies) / sizeof(mountFrequencies[0]);
+         ++attempt) {
+        const uint32_t frequency = mountFrequencies[attempt];
+        bool alreadyTried = false;
+        for (size_t previous = 0; previous < attempt; ++previous) {
+            if (mountFrequencies[previous] == frequency) alreadyTried = true;
+        }
+        if (alreadyTried) continue;
+        digitalWrite(TFT_CS, HIGH);
+        digitalWrite(SD_CS_PIN, HIGH);
+        if (SD.begin(SD_CS_PIN, sharedSpi, frequency, "/sd", 8, false)) {
+            const uint8_t cardType = SD.cardType();
+            if (cardType != CARD_NONE) {
+                sdMounted = true;
+                mountedFrequency = frequency;
+                break;
+            }
+        }
+        SD.end();
+        digitalWrite(SD_CS_PIN, HIGH);
+        delay(10);
+    }
     sdState = sdMounted ? "mounted" : "not detected";
     if (sdMounted) {
         Serial.printf("Storage: SD SPI=%lu Hz, physical=%llu, volume=%llu bytes\n",
-                      static_cast<unsigned long>(SD_SPI_FREQUENCY),
+                      static_cast<unsigned long>(mountedFrequency),
                       SD.cardSize(), SD.totalBytes());
         if (SD.totalBytes() == 0) {
             sdState = "filesystem error";

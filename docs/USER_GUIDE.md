@@ -28,7 +28,7 @@ and displays live RSSI bars, reference guides, frequency endpoints, and a
 highlighted peak. Press `A` to refine the strongest result in 100 kHz steps,
 lock it, and open Record. Press `B` to stop scanning.
 
-### Sub-GHz Record Raw
+### Sub-GHz SubRead / Record Raw
 
 Choose 315, 433.92, 868, or 915 MHz with `UP`/`DOWN`, then press `A` to start
 capturing pulse timings from CC1101 GDO0. Press `A` again to stop and save.
@@ -46,6 +46,11 @@ toggle auto-trigger. The metrics panel reports pulse count, live RSSI, pulse
 rate, and buffer usage. Saving removes paired glitches shorter than 80
 microseconds, trims long start silence, estimates the timing element, and
 reports a generic PWM/OOK candidate when the pulse pairs are consistent.
+After at least 16 pulses, SubRead automatically stops and saves when the signal
+has been quiet for 400 ms. Manual mode still records until `A` is pressed again.
+The completed result shows protocol/preset, decoded key when recognized, bit
+count, `TE`, frame and repeat counts, peak RSSI, and save status. Unrecognized
+signals remain usable as raw pulse captures in Library.
 
 ### Sub-GHz Library and Emulate
 

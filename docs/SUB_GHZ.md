@@ -40,16 +40,28 @@ Analyzer values are RSSI estimates from the CC1101, not calibrated field
 strength. Nearby transmitters, supply noise, antenna mismatch, bandwidth, and
 module quality affect the result.
 
-## Raw Record
+## SubRead / Raw Record
 
-Record captures the HIGH/LOW timing observed on CC1101 GDO0. Choose 315,
+SubRead captures the HIGH/LOW timing observed on CC1101 GDO0. Choose 315,
 433.92, 868, or 915 MHz with `UP`/`DOWN`, then press `A` to arm or start. Press
 `A` again to stop and save. Capture ends automatically at 30 seconds or 8,192
 pulses.
 
+With auto-trigger enabled, SubRead behaves like the Flipper Zero Read workflow:
+it waits for RSSI to cross the configured threshold, captures the burst, and
+automatically stops and saves after 400 ms of silence and at least 16 pulses.
+Disable auto-trigger with a long `B` press when a manual raw capture is wanted.
+
 The capture screen reports the selected frequency, `READY`/`ARMED`/`REC`
 state, live waveform, pulse count, RSSI, pulse rate, buffer usage, and a
 protocol/timing hint after a usable capture is decoded.
+
+After saving, the waveform area becomes a signal-information card showing the
+protocol hint, active CC1101 preset, decoded key (when available), bit count,
+estimated timing element (`TE`), frame pulse count, repeat count, peak RSSI,
+and whether the capture was saved automatically. These are heuristic hints;
+unknown or unsupported signals remain labelled `RAW` and are still available
+in Library for replay.
 
 Auto-trigger is enabled by default. Record waits in `ARMED` until RSSI crosses
 the configured threshold. Hold `B` while idle to toggle auto-trigger. Saved

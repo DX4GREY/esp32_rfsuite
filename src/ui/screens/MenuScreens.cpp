@@ -14,7 +14,7 @@ constexpr const char* MAIN_LABELS[] = {
 };
 constexpr uint8_t MAIN_ICONS[] = {6, 6, 9, 10, 9, 12, 11};
 constexpr const char* SUB_LABELS[] = {
-    "ANALYZER", "RECORD", "LIBRARY", "PRESETS", "PACKETS", "RF TEST"
+    "ANALYZER", "SUB READ", "LIBRARY", "PRESETS", "PACKETS", "RF TEST"
 };
 constexpr uint8_t SUB_ICONS[] = {0, 5, 12, 8, 7, 6};
 }
@@ -357,7 +357,7 @@ void DisplayManager::renderSubGhzPacketScreen() {
 
 void DisplayManager::renderSubGhzRecordScreen() {
     if (!subRecordLayoutDrawn) {
-        drawModernHeader(subGhzRawService.simulationMode() ? "SIM RAW CAPTURE" : "SUB-GHz CAPTURE", SPECTRUM_CRITICAL);
+        drawModernHeader(subGhzRawService.simulationMode() ? "SIM SUB READ" : "SUB-GHz READ", SPECTRUM_CRITICAL);
         tft.fillRoundRect(5, 17, 150, 21, 4, SPECTRUM_CARD_BG);
         tft.drawRoundRect(5, 17, 150, 21, 4, SPECTRUM_BORDER);
         tft.setCursor(10, 24); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG); tft.print("MHz");
@@ -377,7 +377,8 @@ void DisplayManager::renderSubGhzRecordScreen() {
     }
     const int recordingState = subGhzRawService.isArmed() ? 2 :
                                (subGhzRawService.isRecording() ? 1 : 0);
-    if (needRedraw || previousSubRecordState != recordingState) {
+    const bool recordingStateChanged = previousSubRecordState != recordingState;
+    if (needRedraw || recordingStateChanged) {
         tft.fillRect(101, 20, 50, 15, SPECTRUM_CARD_BG);
         tft.fillRoundRect(105, 22, 44, 12, 3,
                           recordingState ? DISPLAY_ACTIVE_BG : SPECTRUM_BORDER);
@@ -385,7 +386,7 @@ void DisplayManager::renderSubGhzRecordScreen() {
         tft.setTextColor(recordingState ? SPECTRUM_CRITICAL : SPECTRUM_LOW,
                          recordingState ? DISPLAY_ACTIVE_BG : SPECTRUM_BORDER);
         tft.print(recordingState == 2 ? "ARMED" : (recordingState == 1 ? "REC" : "READY"));
-        drawModernFooter("U/D FREQ", subGhzRawService.isRecording() ? "A STOP" : "A START", "B BACK");
+        drawModernFooter("U/D FREQ", subGhzRawService.isRecording() ? "A STOP" : "A READ", "B BACK");
         if (recordingState == 1) {
             tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
             tft.drawFastHLine(8, 60, 144, SPECTRUM_GRID);
@@ -397,14 +398,13 @@ void DisplayManager::renderSubGhzRecordScreen() {
     if (needRedraw || previousSubPulseCount != pulses || subGhzRawService.isRecording()) {
         tft.fillRect(43, 85, 109, 16, SPECTRUM_HEADER_BG);
         tft.setCursor(45, 87); tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
-        if (!subGhzRawService.isRecording() && subGhzRawService.decodedBitCount())
-            tft.printf("%s %ub", subGhzRawService.detectedProtocol(),
-                       subGhzRawService.decodedBitCount());
-        else tft.printf("%lu  %d dBm", static_cast<unsigned long>(pulses),
-                        subGhzRawService.liveRssiDbm());
+        tft.printf("%lu  PK %d dBm", static_cast<unsigned long>(pulses),
+                   subGhzRawService.peakRssiDbm());
         tft.setCursor(45, 95); tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
-        tft.printf("%u/s  BUF %u%%", subGhzRawService.pulsesPerSecond(),
-                   subGhzRawService.bufferPercent());
+        if (!subGhzRawService.isRecording() && subGhzRawService.lastFile().length())
+            tft.print(subGhzRawService.autoCompleted() ? "AUTO SAVED" : "SAVED");
+        else tft.printf("%u/s  BUF %u%%", subGhzRawService.pulsesPerSecond(),
+                        subGhzRawService.bufferPercent());
         previousSubPulseCount = pulses;
     }
 
@@ -442,6 +442,25 @@ void DisplayManager::renderSubGhzRecordScreen() {
         subGraphLevel = !subGraphLevel;
     }
     subGraphProcessedPulses += newCount;
+
+    // Once a capture is saved, replace the transient waveform with the useful
+    // signal metadata needed to identify it before opening Library/Emulate.
+    if (!subGhzRawService.isRecording() && subGhzRawService.lastFile().length() &&
+        (needRedraw || recordingStateChanged)) {
+        tft.fillRect(8, 44, 144, 33, SPECTRUM_CARD_BG);
+        tft.setCursor(10, 45); tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_CARD_BG);
+        tft.printf("%s  %s", subGhzRawService.detectedProtocol(), cc1101Manager.presetName());
+        tft.setCursor(10, 56); tft.setTextColor(ST77XX_WHITE, SPECTRUM_CARD_BG);
+        if (subGhzRawService.decodedBitCount())
+            tft.printf("KEY %0*llX", (subGhzRawService.decodedBitCount() + 3) / 4,
+                       static_cast<unsigned long long>(subGhzRawService.decodedKeyValue()));
+        else tft.print("KEY -- (RAW)");
+        tft.setCursor(10, 68); tft.setTextColor(ST77XX_GRAY, SPECTRUM_CARD_BG);
+        tft.printf("TE %uus  %ub  F%u R%u", subGhzRawService.estimatedTeUs(),
+                   subGhzRawService.decodedBitCount(),
+                   subGhzRawService.detectedFramePulses(),
+                   subGhzRawService.detectedRepeatCount());
+    }
 }
 
 void DisplayManager::renderSubGhzEmulateScreen() {
