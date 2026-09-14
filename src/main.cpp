@@ -39,6 +39,13 @@
 // DisplayManager's original dirty-region renderer unchanged.
 bool updateCarouselMenuUI(DisplayManager& dm);
 
+// Implemented in src/ui/FirmwareUpdater.cpp. The input hook extends the global
+// menu only while SD is usable and owns all input once the updater is open.
+// The UI hook also supplies the LIST/non-animated fallback for the conditional
+// menu entry.
+bool processFirmwareUpdaterInput(DisplayManager& dm);
+bool updateFirmwareUpdaterUI(DisplayManager& dm);
+
 static constexpr unsigned long WAKE_HOLD_MS = 1500;
 
 static void configureShutdownWakeSource() {
@@ -83,8 +90,11 @@ static void validateShutdownWakePress() {
 }
 
 void yieldToUI() {
-    displayManager.processInput();
-    displayManager.updateUI();
+    if (!processFirmwareUpdaterInput(displayManager)) displayManager.processInput();
+    if (!updateFirmwareUpdaterUI(displayManager) &&
+        !updateCarouselMenuUI(displayManager)) {
+        displayManager.updateUI();
+    }
     watchdog.feed();
 }
 
@@ -133,7 +143,7 @@ void loop() {
     rfEnvironmentAnalyzer.service();
     watchdog.feed();
     serialCommander.process();
-    displayManager.processInput();
+    if (!processFirmwareUpdaterInput(displayManager)) displayManager.processInput();
 
     if (AppModePolicy::runsSpectrumScan(appState.appMode,
                                         appState.loggingEnabled) &&
@@ -177,7 +187,10 @@ void loop() {
     }
 
     const uint32_t uiStartedUs = micros();
-    if (!updateCarouselMenuUI(displayManager)) displayManager.updateUI();
+    if (!updateFirmwareUpdaterUI(displayManager) &&
+        !updateCarouselMenuUI(displayManager)) {
+        displayManager.updateUI();
+    }
     performanceMonitor.recordUi(micros() - uiStartedUs);
     sessionRecorder.service();
     if (appState.loggingEnabled && !sessionRecorder.isRecording()) {
