@@ -34,6 +34,11 @@
 #include "services/SubGhzRawService.h"
 #include "services/EventLog.h"
 
+// Implemented in src/ui/CarouselMenu.cpp. It returns true only when the
+// animated GRID menu owns the current frame; all other screens continue through
+// DisplayManager's original dirty-region renderer unchanged.
+bool updateCarouselMenuUI(DisplayManager& dm);
+
 static constexpr unsigned long WAKE_HOLD_MS = 1500;
 
 static void configureShutdownWakeSource() {
@@ -47,12 +52,10 @@ static void configureShutdownWakeSource() {
     configureShutdownWakeSource();
     Serial.flush();
     esp_deep_sleep_start();
-    while (true) delay(1000); // Defensive fallback; deep sleep does not return.
+    while (true) delay(1000);
 }
 
 static bool quiesceForShutdown() {
-    // Core 0 must have no application tasks using SPI/radios when ESP-IDF
-    // stalls it as part of the deep-sleep transition.
     const bool probeStopped = rfAuthorizedProbe.stopAndWait();
     const bool environmentStopped = rfEnvironmentAnalyzer.stopAndWait();
     subGhzRawService.prepareForShutdown();
@@ -67,49 +70,30 @@ static void validateShutdownWakePress() {
 
     pinMode(BTN_A, INPUT_PULLUP);
     const unsigned long started = millis();
-    while (digitalRead(BTN_A) == LOW && millis() - started < WAKE_HOLD_MS) {
-        delay(10);
-    }
+    while (digitalRead(BTN_A) == LOW && millis() - started < WAKE_HOLD_MS) delay(10);
 
     if (millis() - started < WAKE_HOLD_MS) {
-        // A short/noisy press must not fully boot the device.
         while (digitalRead(BTN_A) == LOW) delay(10);
         delay(50);
         enterShutdownSleep();
     }
 
-    // Avoid treating the wake gesture as an immediate menu ENTER press.
     while (digitalRead(BTN_A) == LOW) delay(10);
     delay(50);
 }
 
-// Callback to keep buttons & UI responsive during scanning
 void yieldToUI() {
     displayManager.processInput();
     displayManager.updateUI();
     watchdog.feed();
 }
 
-// =============================================================================
-// SETUP
-// =============================================================================
 void setup() {
-    // Deep-sleep wake is accepted only after a deliberate long A press.
     validateShutdownWakePress();
-
-        // 1. Initialize Serial CLI (115200 Baud)
     serialCommander.init(115200);
-
-    // 1b. Load persisted settings (power level, dwell time, jammer target)
     appState.loadSettings();
-
-    // 2. Initialize Navigation Buttons (Pull-Up)
     buttonManager.init();
 
-    // 3. Mount the SD card before initializing the TFT. Combo TFT/microSD
-    // modules share a bus and some variants will not answer CMD0 reliably
-    // after the display controller has already received its init sequence.
-    // StorageManager keeps TFT_CS high while probing the card.
     if (!sessionRecorder.begin()) {
         Serial.println("Session recorder unavailable: " + String(sessionRecorder.lastError()));
     }
@@ -117,23 +101,14 @@ void setup() {
     if (storageManager.sdDetected() && !storageManager.sdUsable())
         eventLog.warn("storage", storageManager.sdStatus());
 
-    // 3b. Initialize TFT after the SD card has entered SPI mode. Both devices
-    // continue sharing HSPI safely through independent chip-select pins.
     displayManager.init();
-
-    // 3c. Show splash screen before entering the menu.
     displayManager.showSplash();
 
     if (!luaEngine.begin()) Serial.println("Lua: " + String(luaEngine.lastError()));
 
-    // 4. Initialize nRF24L01+ Radio (init() retries internally before failing)
-    // Deselect the optional CC1101 before starting the shared RF SPI bus so an
-    // uninitialized module can never drive MISO during nRF24 discovery.
     pinMode(CC1101_CSN_PIN, OUTPUT);
     digitalWrite(CC1101_CSN_PIN, HIGH);
     if (!radioManager.init()) {
-        // Keep the UI, status, storage, and Serial diagnostics available. A
-        // disconnected module can then be diagnosed without a reboot loop.
         Serial.println("No radio detected; continuing in diagnostics-only mode.");
         eventLog.warn("nrf24", "no radio detected");
     }
@@ -148,37 +123,21 @@ void setup() {
     subGhzRawService.setTriggerThreshold(appState.subGhzTriggerThreshold);
     subGhzRawService.setReplayRepeatCount(appState.subGhzReplayRepeats);
 
-    // If first boot, route user through onboarding guide (Requirement 18)
-    if (!appState.onboardingComplete) {
-        appState.appMode = APP_MODE_ONBOARDING;
-    }
-
-    // 5. Initialize the main-loop deadline monitor (3.0s timeout). Avoid a
-    // second Timer Group ISR alongside ESP-IDF's interrupt/task watchdogs.
+    if (!appState.onboardingComplete) appState.appMode = APP_MODE_ONBOARDING;
     watchdog.init(WATCHDOG_TIMEOUT_US);
 }
 
-// =============================================================================
-// MAIN LOOP (CORE 1: UI, SERIAL, & SPECTRUM DISPATCHER)
-// =============================================================================
 void loop() {
     performanceMonitor.tickLoop();
     subGhzRawService.service();
     rfEnvironmentAnalyzer.service();
-    // 1. Reset Watchdog Timer (Heartbeat)
     watchdog.feed();
-
-    // 2. Process Serial Monitor commands if any
     serialCommander.process();
-
-    // 3. Process Physical Button Input
     displayManager.processInput();
 
-    // 4. Execute Based on Active Mode
     if (AppModePolicy::runsSpectrumScan(appState.appMode,
                                         appState.loggingEnabled) &&
         !appState.analyzerFrozen) {
-        // Radio Analyzer Mode: Scan 126 channels and update spectrum levels
         const uint32_t scanStartedUs = micros();
         if (appState.simulationMode && appState.radioBand == RADIO_BAND_24_GHZ) {
             static uint32_t simulatedSweep = 0;
@@ -201,9 +160,6 @@ void loop() {
         } else radioManager.scanSpectrum(yieldToUI);
         performanceMonitor.recordSweep(micros() - scanStartedUs);
     } else if (appState.appMode == APP_MODE_ANALYZER_CHANNEL) {
-        // Channel Inspector Mode: Deep RF monitoring on a single channel
-        // (no per-loop requestRedraw => only dynamic areas are updated,
-        //  eliminating flicker from repeated fillScreen)
         if (appState.simulationMode) {
             const uint8_t level = 25 + ((millis() / 40 + appState.inspectedChannel * 5) % 70);
             appState.inspectedLevel = level;
@@ -215,16 +171,13 @@ void loop() {
         delay(2);
     } else if (appState.appMode == APP_MODE_REBOOT ||
                appState.appMode == APP_MODE_SHUTDOWN) {
-        // Reboot Mode: screen is rendered in updateUI, restart is briefly delayed
         delay(10);
     } else {
-        // Jammer Mode runs on Core 0 background task, Core 1 idle
         delay(10);
     }
 
-    // 5. Render TFT screen if there are updates
     const uint32_t uiStartedUs = micros();
-    displayManager.updateUI();
+    if (!updateCarouselMenuUI(displayManager)) displayManager.updateUI();
     performanceMonitor.recordUi(micros() - uiStartedUs);
     sessionRecorder.service();
     if (appState.loggingEnabled && !sessionRecorder.isRecording()) {
@@ -233,9 +186,8 @@ void loop() {
     }
     appState.serviceSettingsPersistence();
 
-    // 5b. Reboot System: show message then restart ESP32
     if (appState.appMode == APP_MODE_REBOOT) {
-        delay(1200); // give the reboot message time to be visible on screen
+        delay(1200);
         Serial.println("REBOOTING SYSTEM...");
         sessionRecorder.stop();
         storageManager.prepareForRestart();
@@ -244,14 +196,11 @@ void loop() {
     }
 
     if (appState.appMode == APP_MODE_SHUTDOWN) {
-        delay(900); // Keep the shutdown confirmation visible briefly.
+        delay(900);
         while (digitalRead(BTN_A) == LOW) delay(10);
         delay(50);
         Serial.println("SYSTEM SHUTDOWN: entering deep sleep...");
         if (!quiesceForShutdown()) {
-            // A live Core 0 task makes deep sleep unsafe. A clean software
-            // restart is preferable to corrupting IDLE0 and entering a panic
-            // loop; the shutdown request is not persisted across reboot.
             Serial.println("SYSTEM SHUTDOWN: task stop timed out; restarting safely");
             sessionRecorder.stop();
             storageManager.prepareForRestart();
@@ -264,7 +213,6 @@ void loop() {
         enterShutdownSleep();
     }
 
-    // 6. Auto-recovery on Watchdog Timeout
     if (watchdog.isTriggered()) {
         eventLog.error("watchdog", "main loop deadline exceeded");
         Serial.println("WATCHDOG TRIGGERED! Restarting ESP32...");
