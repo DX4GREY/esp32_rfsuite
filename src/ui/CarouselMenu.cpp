@@ -8,6 +8,7 @@
 
 #include "ui/MenuCatalog.h"
 #include "services/SubGhzRawService.h"
+#include "services/StorageManager.h"
 
 namespace {
 struct CarouselItem {
@@ -17,9 +18,9 @@ struct CarouselItem {
 
 constexpr const char* MAIN_LABELS[] = {
     "2.4 GHz", "SUB-GHz", "SETTINGS", "SYS INFO", "LUA",
-    "SD FILES", "DATA", "ANIMATION", "POWER"
+    "SD FILES", "DATA", "ANIMATION", "POWER", "UPDATER"
 };
-constexpr uint8_t MAIN_ICONS[] = {6, 6, 9, 10, 9, 12, 5, 8, 11};
+constexpr uint8_t MAIN_ICONS[] = {6, 6, 9, 10, 9, 12, 5, 8, 11, 12};
 constexpr const char* SUB_LABELS[] = {
     "ANALYZER", "SUB READ", "LIBRARY", "PRESETS", "PACKETS", "RF TEST"
 };
@@ -76,9 +77,6 @@ bool updateCarouselMenuUI(DisplayManager& dm) {
         dm.tft.drawRoundRect(x, y, width, height, selected ? 7 : 4, edge);
         if (selected) {
             dm.tft.drawRoundRect(x + 2, y + 2, width - 4, height - 4, 5, SPECTRUM_GRID);
-            // The selected glyph gets a compact halo. Together with the card
-            // growth this reads as a scale-up on the 160x128 ST7735 without
-            // allocating a sprite/framebuffer.
             dm.tft.drawCircle(centerX, centerY - 2, 13, SPECTRUM_GRID);
         }
         dm.drawMenuIcon(item.icon, centerX, centerY - (selected ? 2 : 0),
@@ -167,7 +165,7 @@ bool updateCarouselMenuUI(DisplayManager& dm) {
     if (appState.appMode == APP_MODE_BAND_SELECT) {
         const int page = dm.bandSelection / 6;
         const int first = page * 6;
-        count = page == 0 ? 6 : (appState.animationsEnabled ? 3 : 2);
+        count = page == 0 ? 6 : 3 + (storageManager.sdUsable() ? 1 : 0);
         selected = constrain(dm.bandSelection - first, 0, count - 1);
         previous = constrain(dm.previousBandSelection - first, 0, count - 1);
         for (int i = 0; i < count; ++i) {
