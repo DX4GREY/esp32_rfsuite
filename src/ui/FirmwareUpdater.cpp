@@ -242,8 +242,6 @@ void flashSelected(DisplayManager& dm) {
     Serial.println("Updater: firmware committed successfully: " + name);
     delay(700);
 
-    // Update.end() has already selected the newly written OTA partition. Close
-    // the still-powered SD cleanly before rebooting into it.
     storageManager.prepareForRestart();
     Serial.flush();
     ESP.restart();
@@ -347,11 +345,22 @@ void drawUpdater(DisplayManager& dm) {
 }
 }  // namespace
 
-// Called before DisplayManager::processInput(). It consumes only the input that
-// needs awareness of the conditional UPDATER entry or the updater screen itself.
 bool processFirmwareUpdaterInput(DisplayManager& dm) {
     if (appState.appMode == APP_MODE_BAND_SELECT) {
-        if (!storageManager.sdUsable()) return false;
+        const int baseCount = appState.animationsEnabled ? 9 : 8;
+        if (!storageManager.sdUsable()) {
+            // If the card became unavailable after UPDATER was selected, never
+            // leave a hidden out-of-range menu cursor behind.
+            if (dm.bandSelection >= baseCount) {
+                dm.previousBandSelection = dm.bandSelection;
+                dm.bandSelection = baseCount - 1;
+                dm.mainMenuScrollOffset = 0;
+                dm.mainMenuNeedsPartialRedraw = false;
+                dm.needRedraw = true;
+                return true;
+            }
+            return false;
+        }
 
         const int itemCount = extendedMainMenuCount();
         if (dm.bandSelection >= itemCount) {
@@ -438,15 +447,16 @@ bool processFirmwareUpdaterInput(DisplayManager& dm) {
         dm.needRedraw = true;
     } else if (buttonManager.isPressed(BTN_B)) {
         updaterConfirm = false;
+        if (!storageManager.sdUsable()) {
+            const int baseCount = appState.animationsEnabled ? 9 : 8;
+            dm.bandSelection = min(dm.bandSelection, baseCount - 1);
+        }
         appState.appMode = APP_MODE_BAND_SELECT;
         dm.needRedraw = true;
     }
     return true;
 }
 
-// Called before the carousel/legacy renderer. Besides the updater itself this
-// renders page 2 of the global menu when LIST/non-animated mode is active, so
-// the conditional UPDATER item never disappears merely because motion is off.
 bool updateFirmwareUpdaterUI(DisplayManager& dm) {
     if (appState.appMode == APP_MODE_UPDATER) {
         const int mode = static_cast<int>(APP_MODE_UPDATER);
