@@ -431,13 +431,15 @@ void RadioManager::stopPacketSniffer() {
 }
 
 bool RadioManager::servicePacketSniffer() {
-    if (!packetSniffer.isRunning()) return false;
+    if (!packetSniffer.isRunning() && !packetSniffer.recoveryRequested()) return false;
     if (!lockBus(pdMS_TO_TICKS(20))) return false;
     RF24& target = snifferUsesRadio2 ? radio2 : radio;
-    const bool captured = packetSniffer.poll(target);
+    bool captured = false;
+    if (packetSniffer.isRunning()) captured = packetSniffer.poll(target);
+    const bool recovered = packetSniffer.recover(target);
     unlockBus();
     packetSniffer.serviceStorage();
-    return captured;
+    return captured || recovered;
 }
 
 bool RadioManager::setPacketSnifferChannel(uint8_t channel) {

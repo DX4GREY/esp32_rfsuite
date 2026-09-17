@@ -13,12 +13,16 @@ class PacketSniffer {
 public:
     bool start(RF24& target, SPIClass& spi, uint8_t cePin, uint8_t csnPin,
                uint8_t channel, SnifferDataRate rate);
+    // Re-apply the promiscuous RX configuration after a transient SPI/radio
+    // fault without clearing the current session counters.
+    bool recover(RF24& target);
     void stop(RF24& target);
     bool poll(RF24& target);
     bool setChannel(RF24& target, uint8_t channel);
     bool setDataRate(RF24& target, SnifferDataRate rate);
 
     bool isRunning() const { return running; }
+    bool recoveryRequested() const { return recoveryPending; }
     bool hasRadioControl() const { return configured; }
     uint8_t channel() const { return activeChannel; }
     SnifferDataRate dataRate() const { return activeRate; }
@@ -44,6 +48,7 @@ private:
     uint8_t csn = 0;
     bool running = false;
     bool configured = false;
+    bool recoveryPending = false;
     uint8_t activeChannel = 0;
     SnifferDataRate activeRate = SnifferDataRate::RATE_2_MBPS;
     uint32_t capturedPackets = 0;
@@ -54,7 +59,15 @@ private:
     String storagePending;
     bool storageReady = false;
     unsigned long lastStorageFlushMs = 0;
+    unsigned long lastHealthCheckMs = 0;
+    unsigned long lastRecoveryAttemptMs = 0;
+    uint8_t connectionFailures = 0;
 
+    static constexpr unsigned long HEALTH_CHECK_INTERVAL_MS = 500;
+    static constexpr unsigned long RECOVERY_RETRY_INTERVAL_MS = 250;
+    static constexpr uint8_t CONNECTION_FAILURE_LIMIT = 3;
+
+    bool configure(RF24& target);
     bool writeRegisterVerified(uint8_t reg, uint8_t value);
     uint8_t transferRegister(uint8_t command, uint8_t value);
     void setError(const String& message);

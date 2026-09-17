@@ -47,9 +47,19 @@ bool PacketSniffer::start(RF24& target, SPIClass& spi, uint8_t cePin,
     bus = &spi;
     ce = cePin;
     csn = csnPin;
+    activeChannel = channel;
+    activeRate = rate;
     clear();
 
     if (appState.saveSniffPacketsToSd) prepareStorage();
+
+    return configure(target);
+}
+
+bool PacketSniffer::configure(RF24& target) {
+    // isChipConnected() checks SETUP_AW against RF24's cached address width.
+    // recover() restores the normal 5-byte width before reaching this helper;
+    // keeping the check here makes a fresh start fail cleanly as well.
 
     if (!target.isChipConnected()) {
         setError("selected nRF24 is not responding");
@@ -70,8 +80,8 @@ bool PacketSniffer::start(RF24& target, SPIClass& spi, uint8_t cePin,
     target.setAutoAck(false);                         // EN_AA = 0
     target.disableCRC();                              // EN_CRC = 0
     if (!writeRegisterVerified(SETUP_AW_REGISTER, 0)) return false;
-    if (!setDataRate(target, rate)) return false;
-    if (!setChannel(target, channel)) return false;
+    if (!setDataRate(target, activeRate)) return false;
+    if (!setChannel(target, activeChannel)) return false;
     target.startListening();                          // PRIM_RX = 1, CE = HIGH
 
     running = true;
@@ -81,20 +91,75 @@ bool PacketSniffer::start(RF24& target, SPIClass& spi, uint8_t cePin,
     return true;
 }
 
+bool PacketSniffer::recover(RF24& target) {
+    if (!configured || bus == nullptr || !recoveryPending) return false;
+
+    const unsigned long now = millis();
+    if (now - lastRecoveryAttemptMs < RECOVERY_RETRY_INTERVAL_MS) return false;
+    lastRecoveryAttemptMs = now;
+
+    // Leave the undocumented 2-byte mode before checking the chip. The RF24
+    // library validates SETUP_AW against its cached width, so checking first
+    // would reject a perfectly usable sniffer radio after every recovery.
+    target.stopListening();
+    target.ce(LOW);
+    target.flush_rx();
+    target.flush_tx();
+    target.powerDown();
+    delay(2);
+    target.setAddressWidth(5);
+
+    if (!target.isChipConnected()) {
+        setError("radio recovery waiting for SPI");
+        return false;
+    }
+
+    if (!configure(target)) {
+        setError("radio recovery configuration failed");
+        return false;
+    }
+
+    connectionFailures = 0;
+    lastHealthCheckMs = now;
+    recoveryPending = false;
+    running = true;
+    Serial.printf("[sniffer] radio recovered ch=%u rate=%s\n",
+                  activeChannel,
+                  activeRate == SnifferDataRate::RATE_1_MBPS ? "1Mbps" : "2Mbps");
+    return true;
+}
+
 void PacketSniffer::stop(RF24& target) {
     if (configured) target.stopListening();
     running = false;
     configured = false;
+    recoveryPending = false;
+    connectionFailures = 0;
 }
 
 bool PacketSniffer::poll(RF24& target) {
     if (!running) return false;
-    // isChipConnected() rejects SETUP_AW=0 by design. Reading CONFIG directly
-    // still detects the all-ones response produced by a disconnected SPI bus.
-    if (transferRegister(0x00, 0xFF) == 0xFF) {
-        running = false;
-        setError("SPI connection lost while capturing");
-        return false;
+
+    // A single bad SPI transaction must not kill a live capture. Check at a
+    // modest interval and require consecutive failures before requesting a
+    // recovery; 0xFF is the nRF24 response seen when MISO/CSN is temporarily
+    // disturbed, not proof that the radio is permanently gone.
+    const unsigned long now = millis();
+    if (now - lastHealthCheckMs >= HEALTH_CHECK_INTERVAL_MS) {
+        lastHealthCheckMs = now;
+        // isChipConnected() rejects SETUP_AW=0 by design. Reading CONFIG
+        // directly still detects the all-ones response from a disconnected
+        // SPI bus while the sniffer is in its undocumented 2-byte mode.
+        if (transferRegister(0x00, 0xFF) == 0xFF) {
+            if (++connectionFailures >= CONNECTION_FAILURE_LIMIT) {
+                running = false;
+                recoveryPending = true;
+                setError("SPI connection lost; recovering radio");
+                return false;
+            }
+        } else {
+            connectionFailures = 0;
+        }
     }
 
     bool captured = false;
@@ -143,6 +208,10 @@ void PacketSniffer::clear() {
     errors = 0;
     lastPacketHex = "";
     errorMessage = "";
+    recoveryPending = false;
+    connectionFailures = 0;
+    lastHealthCheckMs = millis();
+    lastRecoveryAttemptMs = 0;
 }
 
 bool PacketSniffer::prepareStorage() {

@@ -319,7 +319,7 @@ void SubGhzRawService::service() {
     }
     if (!rfTesting) return;
 #if RF_LAB_TX_ENABLED
-    if (millis() - rfTestStartedMs >= 10000) { stopRfTest(); error = "TX LIMIT REACHED"; return; }
+    //if (millis() - rfTestStartedMs >= 10000) { stopRfTest(); error = "TX LIMIT REACHED"; return; }
     cc1101Manager.setRawData((millis() / 2) & 1);
     if (micros() - lastTestHopUs >= static_cast<uint32_t>(appState.dwellTimeUs)) {
         do {
