@@ -5,6 +5,7 @@
 #include "services/SubGhzRawService.h"
 #include "services/StorageManager.h"
 #include "services/SessionRecorder.h"
+#include "core/AppModePolicy.h"
 
 using namespace DisplayUi;
 
@@ -322,120 +323,51 @@ uint16_t DisplayManager::getSignalColor(uint8_t level) {
 }
 
 void DisplayManager::drawStatusBar() {
-    // 1. Radio 1 & 2 indicators (x=102..115)
-    const bool r1 = radioManager.isRadio1Connected() || appState.simulationMode;
-    const bool r2 = radioManager.isRadio2Connected() || appState.simulationMode;
-    tft.fillRoundRect(102, 2, 7, 10, 1, r1 ? SPECTRUM_LOW : SPECTRUM_BORDER);
-    tft.setCursor(103, 3);
-    tft.setTextColor(r1 ? ST77XX_BLACK : ST77XX_GRAY, r1 ? SPECTRUM_LOW : SPECTRUM_BORDER);
-    tft.print("1");
-
-    tft.fillRoundRect(110, 2, 7, 10, 1, r2 ? SPECTRUM_LOW : SPECTRUM_BORDER);
-    tft.setCursor(111, 3);
-    tft.setTextColor(r2 ? ST77XX_BLACK : ST77XX_GRAY, r2 ? SPECTRUM_LOW : SPECTRUM_BORDER);
-    tft.print("2");
-
-    // 2. Storage backend (SD or LF) at x=119
-    const bool sd = storageManager.usingSd();
-    tft.fillRoundRect(119, 2, 14, 10, 2, sd ? SPECTRUM_HEADER_BG : SPECTRUM_BORDER);
-    tft.setCursor(120, 3);
-    tft.setTextColor(sd ? SPECTRUM_ACCENT : SPECTRUM_HIGH, sd ? SPECTRUM_HEADER_BG : SPECTRUM_BORDER);
-    tft.print(sd ? "SD" : "LF");
-
-    // 3. REC indicator at x=135
-    if (sessionRecorder.isRecording()) {
-        tft.fillCircle(137, 7, 3, SPECTRUM_CRITICAL);
-    }
-
-    // 4. SIM or RX/TX at x=143
-    tft.setCursor(143, 3);
-    if (appState.simulationMode) {
-        tft.setTextColor(SPECTRUM_HIGH, SPECTRUM_HEADER_BG);
-        tft.print("SIM");
-    } else if (appState.jamming || subGhzRawService.isRfTesting()) {
-        tft.setTextColor(SPECTRUM_CRITICAL, SPECTRUM_HEADER_BG);
-        tft.print("TX");
-    } else {
-        tft.setTextColor(ST77XX_GRAY, SPECTRUM_HEADER_BG);
-        tft.print("RX");
-    }
+    HeaderTelemetry tel;
+    tel.radio1Connected = radioManager.isRadio1Connected() || appState.simulationMode;
+    tel.radio2Connected = radioManager.isRadio2Connected() || appState.simulationMode;
+    tel.radio1Active = radioManager.isRadio1Connected() && (appState.jamming || AppModePolicy::runsSpectrumScan(appState.appMode, false));
+    tel.radio2Active = radioManager.isRadio2Connected() && (appState.jamming || AppModePolicy::runsSpectrumScan(appState.appMode, false));
+    tel.isSim = appState.simulationMode;
+    tel.isTx = appState.jamming || subGhzRawService.isRfTesting();
+    tel.usingSd = storageManager.usingSd();
+    tel.isRecording = sessionRecorder.isRecording();
+    tel.activeChannel = (appState.appMode == APP_MODE_ANALYZER_CHANNEL) ? appState.inspectedChannel :
+                        (appState.appMode == APP_MODE_ANALYZER_SPECTRUM ? appState.cursorChannel : -1);
+    if (tel.isTx) tel.rfMode = "TX";
+    else if (tel.isSim) tel.rfMode = "SIM";
+    else if (appState.appMode == APP_MODE_ANALYZER_SPECTRUM) tel.rfMode = "SCAN";
+    else if (appState.appMode == APP_MODE_JAMMER) tel.rfMode = "JAM";
+    else if (appState.appMode == APP_MODE_PACKET_SNIFFER) tel.rfMode = "SNIF";
+    else if (appState.radioBand == RADIO_BAND_SUB_GHZ) tel.rfMode = "SUBG";
+    else tel.rfMode = "RX";
+    headerWidget.render(tft, tel, false);
 }
 
 void DisplayManager::drawModernHeader(const char* title, uint16_t accent, int page, int totalPages) {
-    tft.fillRect(0, 0, 160, 14, SPECTRUM_HEADER_BG);
-    if (appState.displayTheme == DISPLAY_THEME_TERMINAL) {
-        tft.drawFastHLine(0, 12, 160, SPECTRUM_GRID);
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.drawRect(2, 3, 10, 8, accent);
-    } else if (appState.displayTheme == DISPLAY_THEME_RETRO) {
-        tft.drawFastHLine(0, 11, 160, SPECTRUM_GRID);
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.fillRect(3, 4, 9, 6, accent);
-    } else if (appState.displayTheme == DISPLAY_THEME_FLIPPER) {
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.fillRoundRect(2, 3, 11, 8, 2, accent);
-        tft.fillRect(5, 5, 5, 4, ST77XX_BLACK);
-    } else if (appState.displayTheme == DISPLAY_THEME_NEON) {
-        tft.drawFastHLine(0, 13, 80, SPECTRUM_ACCENT);
-        tft.drawFastHLine(80, 13, 80, SPECTRUM_BORDER);
-        tft.drawCircle(7, 7, 5, SPECTRUM_BORDER);
-        tft.fillCircle(7, 7, 2, accent);
-    } else if (appState.displayTheme == DISPLAY_THEME_OCEAN) {
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.drawCircle(7, 9, 6, SPECTRUM_BORDER);
-        tft.drawCircle(7, 9, 3, accent);
-    } else if (appState.displayTheme == DISPLAY_THEME_AMBER) {
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.drawFastHLine(2, 3, 11, accent);
-        tft.drawFastVLine(2, 3, 8, accent);
-        tft.drawPixel(12, 10, SPECTRUM_HIGH);
-    } else if (appState.displayTheme == DISPLAY_THEME_MATRIX) {
-        tft.drawFastHLine(0, 13, 160, SPECTRUM_GRID);
-        tft.drawRect(2, 2, 11, 10, SPECTRUM_BORDER);
-        tft.drawFastVLine(5, 4, 6, accent);
-        tft.drawFastVLine(9, 6, 4, accent);
-    } else if (appState.displayTheme == DISPLAY_THEME_VIOLET) {
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.drawLine(7, 2, 13, 7, SPECTRUM_BORDER);
-        tft.drawLine(13, 7, 7, 12, accent);
-        tft.drawLine(7, 12, 1, 7, SPECTRUM_BORDER);
-        tft.drawLine(1, 7, 7, 2, accent);
-    } else if (appState.displayTheme == DISPLAY_THEME_ICE) {
-        tft.drawFastHLine(0, 13, 160, SPECTRUM_BORDER);
-        tft.drawFastHLine(2, 7, 11, accent);
-        tft.drawFastVLine(7, 2, 11, accent);
-        tft.drawLine(3, 3, 11, 11, SPECTRUM_GRID);
-        tft.drawLine(11, 3, 3, 11, SPECTRUM_GRID);
-    } else {
-        tft.drawFastHLine(0, 13, 160, accent);
-        tft.fillCircle(7, 7, 3, accent);
-        tft.drawCircle(7, 7, 5, SPECTRUM_BORDER);
-    }
-
-    tft.setTextSize(1);
-    tft.setTextColor(ST77XX_WHITE, SPECTRUM_HEADER_BG);
-    tft.setCursor(16, 3);
-    const int maxTitleLen = (totalPages > 0) ? 19 : 14;
-    if (title) {
-        if (static_cast<int>(strlen(title)) <= maxTitleLen) {
-            tft.print(title);
-        } else {
-            char buf[24];
-            strncpy(buf, title, maxTitleLen - 1);
-            buf[maxTitleLen - 1] = '~';
-            buf[maxTitleLen] = '\0';
-            tft.print(buf);
-        }
-    }
-
-    if (totalPages > 0) {
-        tft.fillRoundRect(137, 2, 21, 10, 3, SPECTRUM_BORDER);
-        tft.setCursor(139, 3);
-        tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
-        tft.printf("%d/%d", page, totalPages);
-    } else {
-        drawStatusBar();
-    }
+    (void)accent;
+    HeaderTelemetry tel;
+    tel.title = title;
+    tel.page = page;
+    tel.totalPages = totalPages;
+    tel.radio1Connected = radioManager.isRadio1Connected() || appState.simulationMode;
+    tel.radio2Connected = radioManager.isRadio2Connected() || appState.simulationMode;
+    tel.radio1Active = radioManager.isRadio1Connected() && (appState.jamming || AppModePolicy::runsSpectrumScan(appState.appMode, false));
+    tel.radio2Active = radioManager.isRadio2Connected() && (appState.jamming || AppModePolicy::runsSpectrumScan(appState.appMode, false));
+    tel.isSim = appState.simulationMode;
+    tel.isTx = appState.jamming || subGhzRawService.isRfTesting();
+    tel.usingSd = storageManager.usingSd();
+    tel.isRecording = sessionRecorder.isRecording();
+    tel.activeChannel = (appState.appMode == APP_MODE_ANALYZER_CHANNEL) ? appState.inspectedChannel :
+                        (appState.appMode == APP_MODE_ANALYZER_SPECTRUM ? appState.cursorChannel : -1);
+    if (tel.isTx) tel.rfMode = "TX";
+    else if (tel.isSim) tel.rfMode = "SIM";
+    else if (appState.appMode == APP_MODE_ANALYZER_SPECTRUM) tel.rfMode = "SCAN";
+    else if (appState.appMode == APP_MODE_JAMMER) tel.rfMode = "JAM";
+    else if (appState.appMode == APP_MODE_PACKET_SNIFFER) tel.rfMode = "SNIF";
+    else if (appState.radioBand == RADIO_BAND_SUB_GHZ) tel.rfMode = "SUBG";
+    else tel.rfMode = "RX";
+    headerWidget.render(tft, tel, true);
 }
 
 void DisplayManager::showToast(const char* message, ToastType type, uint16_t durationMs) {
@@ -610,26 +542,10 @@ void DisplayManager::drawEmptyState(const char* title, const char* message, cons
 
 void DisplayManager::drawFooterChip(int x, int width, const char* label) {
     if (!label || !label[0]) return;
-    int radius = 3;
-    if (appState.displayTheme == DISPLAY_THEME_TERMINAL ||
-        appState.displayTheme == DISPLAY_THEME_RETRO ||
-        appState.displayTheme == DISPLAY_THEME_MATRIX) radius = 0;
-    else if (appState.displayTheme == DISPLAY_THEME_FLIPPER ||
-             appState.displayTheme == DISPLAY_THEME_AMBER) radius = 2;
-    else if (appState.displayTheme == DISPLAY_THEME_OCEAN) radius = 7;
-    else if (appState.displayTheme == DISPLAY_THEME_VIOLET ||
-             appState.displayTheme == DISPLAY_THEME_NEON) radius = 5;
-    tft.fillRoundRect(x, 107, width, 16, radius, DISPLAY_FOOTER_BG);
-    if (appState.displayTheme == DISPLAY_THEME_FLIPPER)
-        tft.drawRoundRect(x, 107, width, 16, radius, SPECTRUM_ACCENT);
-    else if (appState.displayTheme == DISPLAY_THEME_NEON)
-        tft.drawRoundRect(x, 107, width, 16, radius, SPECTRUM_BORDER);
-    else if (appState.displayTheme == DISPLAY_THEME_RETRO)
-        tft.drawFastHLine(x + 2, 109, width - 4, SPECTRUM_HIGH);
-    else if (appState.displayTheme == DISPLAY_THEME_TERMINAL)
-        tft.drawFastVLine(x + 2, 110, 10, SPECTRUM_ACCENT);
-    
-    char buf[12];
+    tft.fillRect(x, 107, width, 16, TacticalColor::DarkCharcoal);
+    tft.drawRect(x, 107, width, 16, TacticalColor::Wireframe);
+
+    char buf[16];
     int maxChars = (width - 4) / 6;
     if (maxChars < 1) maxChars = 1;
     strncpy(buf, label, maxChars);
@@ -638,7 +554,7 @@ void DisplayManager::drawFooterChip(int x, int width, const char* label) {
     int textX = x + (width - textLen * 6) / 2;
     if (textX < x + 1) textX = x + 1;
     tft.setCursor(textX, 111);
-    tft.setTextColor(SPECTRUM_ACCENT, DISPLAY_FOOTER_BG);
+    tft.setTextColor(TacticalColor::HighWhite, TacticalColor::DarkCharcoal);
     tft.print(buf);
 }
 
@@ -712,7 +628,8 @@ void DisplayManager::drawThemeAnimation() {
 }
 
 void DisplayManager::drawModernFooter(const char* left, const char* middle, const char* right) {
-    tft.fillRect(0, 105, 160, 23, ST77XX_BLACK);
+    tft.fillRect(0, 105, 160, 23, TacticalColor::PureBlack);
+    tft.drawFastHLine(0, 105, 160, TacticalColor::Wireframe);
     if (left && left[0]) drawFooterChip(3, 48, left);
     if (middle && middle[0]) drawFooterChip(56, 49, middle);
     if (right && right[0]) drawFooterChip(110, 47, right);

@@ -8,6 +8,12 @@
 #include "services/EventLog.h"
 #include "services/SessionRecorder.h"
 #include "ui/DisplaySupport.h"
+#include "ui/TacticalTheme.h"
+#include "ui/TacticalWidgets.h"
+#include "ui/HeaderWidget.h"
+#include "ui/MenuListView.h"
+#include "ui/SpectrumScannerView.h"
+#include "ui/PacketInspectorView.h"
 
 class DisplayManager {
 public:
@@ -35,8 +41,17 @@ public:
     bool isErrorModalActive() const { return errorModalActive; }
     void drawEmptyState(const char* title, const char* message, const char* actionA = nullptr, const char* actionB = "B: BACK");
 
+    HeaderWidget& getHeaderWidget() { return headerWidget; }
+    MenuListView& getMenuListView() { return menuListView; }
+    SpectrumScannerView& getSpectrumScannerView() { return spectrumScannerView; }
+    PacketInspectorView& getPacketInspectorView() { return packetInspectorView; }
+
 private:
     Adafruit_ST7735 tft;
+    HeaderWidget headerWidget;
+    MenuListView menuListView;
+    SpectrumScannerView spectrumScannerView;
+    PacketInspectorView packetInspectorView;
     // Toast state
     char toastMessage[32] = {};
     DisplayUi::ToastType toastType = DisplayUi::TOAST_INFO;

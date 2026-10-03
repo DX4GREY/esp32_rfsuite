@@ -4,9 +4,10 @@
 namespace {
 
 constexpr DisplayUi::ThemePalette THEMES[DISPLAY_THEME_COUNT] = {
-    // CYBER — original cyan UI.
-    {0x0862, 0x0021, 0x1ACB, 0x10E4, 0x05FF, 0x05F4,
-     0xBFE0, 0xFD20, 0xF94F, 0x10A2, 0x4004, 0x0862},
+    // CYBER — tactical high-contrast UI (ESP32-DIV).
+    {TacticalColor::PureBlack, TacticalColor::DarkCharcoal, TacticalColor::Wireframe, TacticalColor::Wireframe,
+     TacticalColor::Cyan, TacticalColor::SuccessGreen, TacticalColor::Cyan, TacticalColor::AmberOrange,
+     TacticalColor::ThreatRed, TacticalColor::PureBlack, TacticalColor::Wireframe, TacticalColor::DarkCharcoal},
     // OCEAN — deep navy with bright aqua highlights.
     {0x0213, 0x000A, 0x03BF, 0x0193, 0x3DFF, 0x07FF,
      0x7DFF, 0xFFE0, 0xFB2C, 0x0210, 0x1018, 0x0193},

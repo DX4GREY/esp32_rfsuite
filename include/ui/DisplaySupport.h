@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include "core/AppTypes.h"
+#include "ui/TacticalTheme.h"
 
 namespace DisplayUi {
 

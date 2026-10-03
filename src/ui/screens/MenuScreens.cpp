@@ -22,6 +22,38 @@ int mainMenuCount() { return appState.animationsEnabled ? 9 : 8; }
 int mainFeatureIndex(int displayIndex) {
     return (!appState.animationsEnabled && displayIndex >= 7) ? displayIndex + 1 : displayIndex;
 }
+
+class CatalogMenuDataSource : public IMenuDataSource {
+public:
+    void setPage(int p) { _page = p; }
+    size_t getItemCount() const override {
+        return MenuCatalog::pageItemCount(_page);
+    }
+    MenuItemContract getItem(size_t index) const override {
+        const MenuFeature& feat = MenuCatalog::featureAt(_page, index);
+        const int featureIndex = MenuCatalog::featureIndex(_page, index);
+        MenuItemContract contract;
+        contract.label = feat.label;
+        contract.iconId = feat.iconId;
+        contract.badgeText = nullptr;
+        contract.badgeColor = 0;
+
+        if (featureIndex == 4 && appState.eventCount > 0) {
+            static char evtBuf[8];
+            snprintf(evtBuf, sizeof(evtBuf), "%u", appState.eventCount);
+            contract.badgeText = evtBuf;
+            contract.badgeColor = TacticalColor::AmberOrange;
+        } else if (featureIndex == 5 && appState.loggingEnabled) {
+            contract.badgeText = "REC";
+            contract.badgeColor = TacticalColor::ThreatRed;
+        }
+        return contract;
+    }
+private:
+    int _page = 0;
+};
+
+static CatalogMenuDataSource s_catalogDataSource;
 }
 
 void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
@@ -826,18 +858,14 @@ void DisplayManager::drawMenuItem(int index, bool selected) {
 // PARTIAL MENU REDRAW (only the two affected items)
 // =============================================================================
 void DisplayManager::redrawMenuItems(int oldSel, int newSel) {
-    if (appState.menuLayout == MENU_LAYOUT_LIST &&
-        prevMenuScrollOffset != menuScrollOffset) {
-        tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
-        const int count = MenuCatalog::pageItemCount(menuPage);
-        for (int i = menuScrollOffset; i < min(count, menuScrollOffset + 4); ++i)
-            drawMenuItem(i, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawMenuItem(menuSelection, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
+    if (appState.menuLayout == MENU_LAYOUT_LIST) {
+        s_catalogDataSource.setPage(menuPage);
+        menuListView.setDataSource(&s_catalogDataSource);
+        if (prevMenuScrollOffset != menuScrollOffset) {
+            menuListView.render(tft, menuSelection, menuScrollOffset);
+        } else {
+            menuListView.renderPartialSelection(tft, oldSel, newSel, menuScrollOffset);
         }
-        menuTransitionPhase = 3;
     } else if (oldSel != newSel) {
         drawMenuItem(oldSel, false);
         for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
@@ -853,27 +881,22 @@ void DisplayManager::redrawMenuItems(int oldSel, int newSel) {
 // RENDER MAIN MENU (COMPACT & FIT)
 // =============================================================================
 void DisplayManager::renderMainMenu() {
-    drawModernHeader(appState.simulationMode ? "2.4 GHz [SIM]" : MenuCatalog::pageTitle(menuPage), SPECTRUM_ACCENT);
-    tft.fillRoundRect(137, 2, 20, 10, 3, SPECTRUM_BORDER);
-    tft.setCursor(139, 3);
-    tft.setTextColor(SPECTRUM_ACCENT, SPECTRUM_BORDER);
-    tft.print(menuPage + 1);
-    tft.print("/");
-    tft.print(MenuCatalog::PAGE_COUNT);
+    drawModernHeader(appState.simulationMode ? "2.4 GHz [SIM]" : MenuCatalog::pageTitle(menuPage),
+                     TacticalColor::Cyan, menuPage + 1, MenuCatalog::PAGE_COUNT);
 
-    // Both layouts share the same catalog and selection state. Clear only the
-    // viewport on page/layout changes; navigation remains partial.
-    // Page changes keep APP_MODE_MENU, so clear the list viewport here to
-    // remove rows left by a previous page with more items.
-    tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
-    const int count = MenuCatalog::pageItemCount(menuPage);
-    const int first = appState.menuLayout == MENU_LAYOUT_LIST ? menuScrollOffset : 0;
-    const int last = appState.menuLayout == MENU_LAYOUT_LIST ? min(count, first + 4) : count;
-    for (int i = first; i < last; i++) {
-        drawMenuItem(i, i == menuSelection);
+    if (appState.menuLayout == MENU_LAYOUT_LIST) {
+        s_catalogDataSource.setPage(menuPage);
+        menuListView.setDataSource(&s_catalogDataSource);
+        menuListView.render(tft, menuSelection, menuScrollOffset);
+    } else {
+        tft.fillRect(0, 15, 160, 89, TacticalColor::PureBlack);
+        const int count = MenuCatalog::pageItemCount(menuPage);
+        for (int i = 0; i < count; i++) {
+            drawMenuItem(i, i == menuSelection);
+        }
     }
 
-    drawModernFooter("U/D MOVE", "A OPEN", "B PAGE");
+    drawModernFooter("U/D NAV", "SEL RUN", "PAGE NEXT");
 }
 
 // =============================================================================
