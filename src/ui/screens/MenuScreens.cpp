@@ -22,11 +22,14 @@ int mainMenuCount() { return appState.animationsEnabled ? 9 : 8; }
 int mainFeatureIndex(int displayIndex) {
     return (!appState.animationsEnabled && displayIndex >= 7) ? displayIndex + 1 : displayIndex;
 }
+static GFXcanvas16 s_menuCardCanvas(154, 27);
 }
 
 void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
                                         bool selected, bool list,
-                                        uint16_t background, uint16_t border) {
+                                        uint16_t background, uint16_t border,
+                                        Adafruit_GFX* target) {
+    Adafruit_GFX& out = target ? *target : tft;
     int radius = 4;
     switch (appState.displayTheme) {
         case DISPLAY_THEME_OCEAN: radius = 8; break;
@@ -43,70 +46,70 @@ void DisplayManager::drawThemedMenuCard(int x, int y, int width, int height,
 
     const uint8_t motion = selected ? min<uint8_t>(3, menuTransitionPhase) : 3;
     const uint16_t animatedBorder = selected && motion < 2 ? SPECTRUM_GRID : border;
-    tft.fillRoundRect(x, y, width, height, radius, background);
-    tft.drawRoundRect(x, y, width, height, radius, animatedBorder);
+    out.fillRoundRect(x, y, width, height, radius, background);
+    out.drawRoundRect(x, y, width, height, radius, animatedBorder);
 
     switch (appState.displayTheme) {
         case DISPLAY_THEME_FLIPPER:
             if (selected) {
                 const int marker = list ? max(1, (5 * (motion + 1)) / 4) :
                                           max(4, ((width - 6) * (motion + 1)) / 4);
-                tft.fillRect(x + 3, y + 3, marker, list ? height - 6 : 3,
+                out.fillRect(x + 3, y + 3, marker, list ? height - 6 : 3,
                              SPECTRUM_ACCENT);
-                if (!list && motion >= 2) tft.drawFastHLine(x + 7, y + height - 3,
+                if (!list && motion >= 2) out.drawFastHLine(x + 7, y + height - 3,
                                              ((width - 14) * motion) / 3,
                                              SPECTRUM_ACCENT);
             }
             break;
         case DISPLAY_THEME_NEON:
             if (selected && motion >= 2 && width > 8 && height > 8)
-                tft.drawRoundRect(x + 2, y + 2, width - 4, height - 4,
+                out.drawRoundRect(x + 2, y + 2, width - 4, height - 4,
                                   max(1, radius - 2), SPECTRUM_GRID);
             break;
         case DISPLAY_THEME_RETRO:
-            tft.drawFastHLine(x + 2, y + 2, width - 4,
+            out.drawFastHLine(x + 2, y + 2, width - 4,
                               selected ? SPECTRUM_ACCENT : SPECTRUM_GRID);
-            tft.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
+            out.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
             break;
         case DISPLAY_THEME_TERMINAL:
             if (selected) {
                 const int markerHeight = max(2, ((height - 4) * (motion + 1)) / 4);
-                tft.drawFastVLine(x + 2, y + 2, markerHeight, SPECTRUM_ACCENT);
-                if (motion >= 2) tft.drawPixel(x + 4, y + height / 2, SPECTRUM_ACCENT);
+                out.drawFastVLine(x + 2, y + 2, markerHeight, SPECTRUM_ACCENT);
+                if (motion >= 2) out.drawPixel(x + 4, y + height / 2, SPECTRUM_ACCENT);
             }
             break;
         case DISPLAY_THEME_MATRIX:
             if (selected) {
                 const int bracket = 2 + motion * 2;
-                tft.drawFastHLine(x, y, bracket, SPECTRUM_ACCENT);
-                tft.drawFastHLine(x + width - bracket, y + height - 1, bracket,
+                out.drawFastHLine(x, y, bracket, SPECTRUM_ACCENT);
+                out.drawFastHLine(x + width - bracket, y + height - 1, bracket,
                                   SPECTRUM_ACCENT);
             }
             break;
         case DISPLAY_THEME_AMBER:
-            tft.drawPixel(x + 1, y + 1, SPECTRUM_HIGH);
-            tft.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
+            out.drawPixel(x + 1, y + 1, SPECTRUM_HIGH);
+            out.drawPixel(x + width - 2, y + height - 2, SPECTRUM_HIGH);
             break;
         case DISPLAY_THEME_VIOLET:
-            if (selected) tft.drawFastHLine(x + 7, y + height - 2,
+            if (selected) out.drawFastHLine(x + 7, y + height - 2,
                                             max(2, ((width - 14) * (motion + 1)) / 4),
                                             SPECTRUM_ACCENT);
             break;
         case DISPLAY_THEME_OCEAN:
-            if (selected) tft.fillCircle(x + width - 9, y + height / 2,
+            if (selected) out.fillCircle(x + width - 9, y + height / 2,
                                          motion >= 2 ? 2 : 1,
                                          SPECTRUM_ACCENT);
             break;
         case DISPLAY_THEME_ICE:
             if (selected && motion >= 1) {
-                tft.drawLine(x + width - 10, y + 2, x + width - 3, y + height / 2,
+                out.drawLine(x + width - 10, y + 2, x + width - 3, y + height / 2,
                              SPECTRUM_ACCENT);
-                tft.drawLine(x + width - 3, y + height / 2, x + width - 10,
+                out.drawLine(x + width - 3, y + height / 2, x + width - 10,
                              y + height - 3, SPECTRUM_ACCENT);
             }
             break;
         default:
-            if (selected) tft.fillRoundRect(x + 2, y + (list ? 3 : 5),
+            if (selected) out.fillRoundRect(x + 2, y + (list ? 3 : 5),
                                             max(1, static_cast<int>(motion)),
                                             max(2, ((list ? height - 6 : height - 10) *
                                                     (motion + 1)) / 4), 1,
@@ -126,14 +129,16 @@ void DisplayManager::drawMainMenuItem(int featureIndex, int slot, bool selected)
     const int height = list ? 20 : 26;
     const uint16_t bg = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
     const uint16_t edge = selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER;
-    tft.fillRect(x, y, width, height, ST77XX_BLACK);
-    drawThemedMenuCard(x, y, width, height, selected, list, bg, edge);
-    drawMenuIcon(MAIN_ICONS[featureIndex], list ? x + 20 : x + width / 2,
-                 list ? y + 10 : y + 8, selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg);
-    const int labelX = list ? x + 39 : x + (width - static_cast<int>(strlen(MAIN_LABELS[featureIndex])) * 6) / 2;
-    tft.setCursor(labelX, list ? y + 7 : y + 17);
-    tft.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, bg);
-    tft.print(MAIN_LABELS[featureIndex]);
+
+    s_menuCardCanvas.fillScreen(ST77XX_BLACK);
+    drawThemedMenuCard(0, 0, width, height, selected, list, bg, edge, &s_menuCardCanvas);
+    drawMenuIcon(MAIN_ICONS[featureIndex], list ? 20 : width / 2,
+                 list ? 10 : 8, selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg, &s_menuCardCanvas);
+    const int labelX = list ? 39 : (width - static_cast<int>(strlen(MAIN_LABELS[featureIndex])) * 6) / 2;
+    s_menuCardCanvas.setCursor(labelX, list ? 7 : 17);
+    s_menuCardCanvas.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, bg);
+    s_menuCardCanvas.print(MAIN_LABELS[featureIndex]);
+    tft.drawRGBBitmap(x, y, s_menuCardCanvas.getBuffer(), width, height);
 }
 
 void DisplayManager::renderBandSelector() {
@@ -160,21 +165,11 @@ void DisplayManager::redrawMainMenuItems() {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         const int count = page == 0 ? 6 : mainMenuCount() - 6;
         for (int slot = mainMenuScrollOffset; slot < min(count, mainMenuScrollOffset + 4); ++slot)
-            drawMainMenuItem(page * 6 + slot, slot, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawMainMenuItem(bandSelection, bandSelection % 6, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
-        }
-        menuTransitionPhase = 3;
+            drawMainMenuItem(page * 6 + slot, slot, (page * 6 + slot) == bandSelection);
     } else {
-        drawMainMenuItem(previousBandSelection, previousBandSelection % 6, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawMainMenuItem(bandSelection, bandSelection % 6, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
-        }
         menuTransitionPhase = 3;
+        drawMainMenuItem(previousBandSelection, previousBandSelection % 6, false);
+        drawMainMenuItem(bandSelection, bandSelection % 6, true);
     }
 }
 
@@ -188,14 +183,16 @@ void DisplayManager::drawSubGhzMenuItem(int index, bool selected) {
     const int height = list ? 20 : 26;
     const uint16_t bg = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
     const uint16_t edge = selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER;
-    tft.fillRect(x, y, width, height, ST77XX_BLACK);
-    drawThemedMenuCard(x, y, width, height, selected, list, bg, edge);
-    drawMenuIcon(SUB_ICONS[index], list ? x + 20 : x + width / 2,
-                 list ? y + 10 : y + 8, selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg);
-    const int labelX = list ? x + 39 : x + (width - static_cast<int>(strlen(SUB_LABELS[index])) * 6) / 2;
-    tft.setCursor(labelX, list ? y + 7 : y + 17);
-    tft.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, bg);
-    tft.print(SUB_LABELS[index]);
+
+    s_menuCardCanvas.fillScreen(ST77XX_BLACK);
+    drawThemedMenuCard(0, 0, width, height, selected, list, bg, edge, &s_menuCardCanvas);
+    drawMenuIcon(SUB_ICONS[index], list ? 20 : width / 2,
+                 list ? 10 : 8, selected ? SPECTRUM_ACCENT : ST77XX_GRAY, bg, &s_menuCardCanvas);
+    const int labelX = list ? 39 : (width - static_cast<int>(strlen(SUB_LABELS[index])) * 6) / 2;
+    s_menuCardCanvas.setCursor(labelX, list ? 7 : 17);
+    s_menuCardCanvas.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, bg);
+    s_menuCardCanvas.print(SUB_LABELS[index]);
+    tft.drawRGBBitmap(x, y, s_menuCardCanvas.getBuffer(), width, height);
 }
 
 void DisplayManager::renderSubGhzScreen() {
@@ -227,21 +224,11 @@ void DisplayManager::redrawSubGhzMenuItems() {
         previousSubGhzMenuScrollOffset != subGhzMenuScrollOffset) {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         for (int i = subGhzMenuScrollOffset; i < min(6, subGhzMenuScrollOffset + 4); ++i)
-            drawSubGhzMenuItem(i, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawSubGhzMenuItem(subGhzMenuSelection, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
-        }
-        menuTransitionPhase = 3;
+            drawSubGhzMenuItem(i, i == subGhzMenuSelection);
     } else {
-        drawSubGhzMenuItem(previousSubGhzMenuSelection, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawSubGhzMenuItem(subGhzMenuSelection, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
-        }
         menuTransitionPhase = 3;
+        drawSubGhzMenuItem(previousSubGhzMenuSelection, false);
+        drawSubGhzMenuItem(subGhzMenuSelection, true);
     }
 }
 
@@ -626,19 +613,20 @@ void DisplayManager::drawSubGhzFileItem(size_t index, bool selected) {
     if (index < subGhzFileScrollOffset || index >= subGhzFileScrollOffset + 4) return;
     const int y = 16 + static_cast<int>(index - subGhzFileScrollOffset) * 22;
     const uint16_t bg = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
-    tft.fillRect(3, y, 154, 20, ST77XX_BLACK);
-    tft.fillRoundRect(3, y, 154, 20, 4, bg);
-    tft.drawRoundRect(3, y, 154, 20, 4,
+    s_menuCardCanvas.fillScreen(ST77XX_BLACK);
+    s_menuCardCanvas.fillRoundRect(0, 0, 154, 20, 4, bg);
+    s_menuCardCanvas.drawRoundRect(0, 0, 154, 20, 4,
                       selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER);
-    if (selected) tft.fillRoundRect(5, y + 3, 3, 14, 1, SPECTRUM_ACCENT);
+    if (selected) s_menuCardCanvas.fillRoundRect(2, 3, 3, 14, 1, SPECTRUM_ACCENT);
     const bool favorite = subGhzRawService.isFavorite(subGhzFiles[index]);
-    tft.setCursor(13, y + 7);
-    tft.setTextColor(favorite ? SPECTRUM_HIGH : ST77XX_GRAY, bg);
-    tft.print(favorite ? "*" : " ");
+    s_menuCardCanvas.setCursor(10, 7);
+    s_menuCardCanvas.setTextColor(favorite ? SPECTRUM_HIGH : ST77XX_GRAY, bg);
+    s_menuCardCanvas.print(favorite ? "*" : " ");
     String shown = subGhzFiles[index]; if (shown.length() > 19) shown.remove(19);
-    tft.setCursor(21, y + 7);
-    tft.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, bg);
-    tft.print(shown);
+    s_menuCardCanvas.setCursor(18, 7);
+    s_menuCardCanvas.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, bg);
+    s_menuCardCanvas.print(shown);
+    tft.drawRGBBitmap(3, y, s_menuCardCanvas.getBuffer(), 154, 20);
 }
 
 void DisplayManager::redrawSubGhzFileItems() {
@@ -699,85 +687,87 @@ void DisplayManager::renderSubGhzRfTestScreen() {
 }
 
 void DisplayManager::drawMenuIcon(int index, int centerX, int centerY,
-                                  uint16_t color, uint16_t background) {
+                                  uint16_t color, uint16_t background,
+                                  Adafruit_GFX* target) {
+    Adafruit_GFX& out = target ? *target : tft;
     switch (index) {
         case 0: // Spectrum bars
-            tft.drawFastVLine(centerX - 7, centerY + 1, 5, color);
-            tft.drawFastVLine(centerX - 3, centerY - 3, 9, color);
-            tft.drawFastVLine(centerX + 1, centerY - 6, 12, color);
-            tft.drawFastVLine(centerX + 5, centerY - 1, 7, color);
-            tft.drawFastHLine(centerX - 9, centerY + 6, 18, color);
+            out.drawFastVLine(centerX - 7, centerY + 1, 5, color);
+            out.drawFastVLine(centerX - 3, centerY - 3, 9, color);
+            out.drawFastVLine(centerX + 1, centerY - 6, 12, color);
+            out.drawFastVLine(centerX + 5, centerY - 1, 7, color);
+            out.drawFastHLine(centerX - 9, centerY + 6, 18, color);
             break;
         case 1: // Waterfall/history
             for (int row = 0; row < 4; row++) {
-                tft.drawFastHLine(centerX - 8 + row, centerY - 6 + row * 4,
+                out.drawFastHLine(centerX - 8 + row, centerY - 6 + row * 4,
                                   16 - row * 2, color);
             }
             break;
         case 2: // Magnifier
-            tft.drawCircle(centerX - 2, centerY - 2, 6, color);
-            tft.drawLine(centerX + 3, centerY + 3, centerX + 8, centerY + 8, color);
-            tft.fillCircle(centerX - 2, centerY - 2, 1, color);
+            out.drawCircle(centerX - 2, centerY - 2, 6, color);
+            out.drawLine(centerX + 3, centerY + 3, centerX + 8, centerY + 8, color);
+            out.fillCircle(centerX - 2, centerY - 2, 1, color);
             break;
         case 3: // Survey chart
-            tft.drawFastHLine(centerX - 9, centerY + 6, 18, color);
-            tft.fillRect(centerX - 7, centerY, 3, 6, color);
-            tft.fillRect(centerX - 2, centerY - 4, 3, 10, color);
-            tft.fillRect(centerX + 3, centerY - 1, 3, 7, color);
+            out.drawFastHLine(centerX - 9, centerY + 6, 18, color);
+            out.fillRect(centerX - 7, centerY, 3, 6, color);
+            out.fillRect(centerX - 2, centerY - 4, 3, 10, color);
+            out.fillRect(centerX + 3, centerY - 1, 3, 7, color);
             break;
         case 4: // Event marker
-            tft.drawCircle(centerX, centerY, 7, color);
-            tft.drawLine(centerX, centerY - 5, centerX - 2, centerY + 1, color);
-            tft.drawLine(centerX - 2, centerY + 1, centerX + 3, centerY + 1, color);
-            tft.drawFastVLine(centerX + 3, centerY + 1, 4, color);
+            out.drawCircle(centerX, centerY, 7, color);
+            out.drawLine(centerX, centerY - 5, centerX - 2, centerY + 1, color);
+            out.drawLine(centerX - 2, centerY + 1, centerX + 3, centerY + 1, color);
+            out.drawFastVLine(centerX + 3, centerY + 1, 4, color);
             break;
         case 5: // Recording/logging
-            tft.drawRoundRect(centerX - 9, centerY - 7, 18, 14, 3, color);
-            tft.fillCircle(centerX, centerY, 4, color);
+            out.drawRoundRect(centerX - 9, centerY - 7, 18, 14, 3, color);
+            out.fillCircle(centerX, centerY, 4, color);
             break;
         case 6: // RF antenna
-            tft.drawFastVLine(centerX, centerY - 4, 10, color);
-            tft.fillCircle(centerX, centerY - 5, 2, color);
-            tft.drawLine(centerX - 3, centerY + 5, centerX + 3, centerY + 5, color);
-            tft.drawLine(centerX - 5, centerY - 3, centerX - 8, centerY, color);
-            tft.drawLine(centerX + 5, centerY - 3, centerX + 8, centerY, color);
+            out.drawFastVLine(centerX, centerY - 4, 10, color);
+            out.fillCircle(centerX, centerY - 5, 2, color);
+            out.drawLine(centerX - 3, centerY + 5, centerX + 3, centerY + 5, color);
+            out.drawLine(centerX - 5, centerY - 3, centerX - 8, centerY, color);
+            out.drawLine(centerX + 5, centerY - 3, centerX + 8, centerY, color);
             break;
         case 7: // Dual-radio diagnostics
-            tft.drawRoundRect(centerX - 9, centerY - 6, 7, 12, 2, color);
-            tft.drawRoundRect(centerX + 2, centerY - 6, 7, 12, 2, color);
-            tft.fillCircle(centerX - 6, centerY + 3, 1, color);
-            tft.fillCircle(centerX + 5, centerY + 3, 1, color);
+            out.drawRoundRect(centerX - 9, centerY - 6, 7, 12, 2, color);
+            out.drawRoundRect(centerX + 2, centerY - 6, 7, 12, 2, color);
+            out.fillCircle(centerX - 6, centerY + 3, 1, color);
+            out.fillCircle(centerX + 5, centerY + 3, 1, color);
             break;
         case 8: // Profiles
-            tft.drawRoundRect(centerX - 9, centerY - 7, 18, 5, 2, color);
-            tft.drawRoundRect(centerX - 7, centerY, 14, 5, 2, color);
-            tft.drawRoundRect(centerX - 5, centerY + 7, 10, 3, 1, color);
+            out.drawRoundRect(centerX - 9, centerY - 7, 18, 5, 2, color);
+            out.drawRoundRect(centerX - 7, centerY, 14, 5, 2, color);
+            out.drawRoundRect(centerX - 5, centerY + 7, 10, 3, 1, color);
             break;
         case 9: // Settings sliders
-            tft.drawFastHLine(centerX - 9, centerY - 5, 18, color);
-            tft.drawFastHLine(centerX - 9, centerY, 18, color);
-            tft.drawFastHLine(centerX - 9, centerY + 5, 18, color);
-            tft.fillCircle(centerX - 3, centerY - 5, 2, background);
-            tft.drawCircle(centerX - 3, centerY - 5, 2, color);
-            tft.fillCircle(centerX + 4, centerY, 2, background);
-            tft.drawCircle(centerX + 4, centerY, 2, color);
-            tft.fillCircle(centerX, centerY + 5, 2, background);
-            tft.drawCircle(centerX, centerY + 5, 2, color);
+            out.drawFastHLine(centerX - 9, centerY - 5, 18, color);
+            out.drawFastHLine(centerX - 9, centerY, 18, color);
+            out.drawFastHLine(centerX - 9, centerY + 5, 18, color);
+            out.fillCircle(centerX - 3, centerY - 5, 2, background);
+            out.drawCircle(centerX - 3, centerY - 5, 2, color);
+            out.fillCircle(centerX + 4, centerY, 2, background);
+            out.drawCircle(centerX + 4, centerY, 2, color);
+            out.fillCircle(centerX, centerY + 5, 2, background);
+            out.drawCircle(centerX, centerY + 5, 2, color);
             break;
         case 10: // Device status
-            tft.drawRoundRect(centerX - 8, centerY - 7, 16, 14, 3, color);
-            tft.fillCircle(centerX, centerY - 3, 1, color);
-            tft.drawFastVLine(centerX, centerY, 4, color);
+            out.drawRoundRect(centerX - 8, centerY - 7, 16, 14, 3, color);
+            out.fillCircle(centerX, centerY - 3, 1, color);
+            out.drawFastVLine(centerX, centerY, 4, color);
             break;
         case 11: // Power/reboot
-            tft.drawCircle(centerX, centerY, 7, color);
-            tft.fillRect(centerX - 2, centerY - 8, 5, 7, background);
-            tft.drawFastVLine(centerX, centerY - 8, 9, color);
+            out.drawCircle(centerX, centerY, 7, color);
+            out.fillRect(centerX - 2, centerY - 8, 5, 7, background);
+            out.drawFastVLine(centerX, centerY - 8, 9, color);
             break;
         case 12: // Folder / SD file explorer
-            tft.drawRoundRect(centerX - 9, centerY - 5, 18, 12, 2, color);
-            tft.fillRect(centerX - 7, centerY - 8, 8, 4, color);
-            tft.drawFastHLine(centerX - 6, centerY, 12, color);
+            out.drawRoundRect(centerX - 9, centerY - 5, 18, 12, 2, color);
+            out.fillRect(centerX - 7, centerY - 8, 8, 4, color);
+            out.drawFastHLine(centerX - 6, centerY, 12, color);
             break;
     }
 }
@@ -796,29 +786,47 @@ void DisplayManager::drawMenuItem(int index, bool selected) {
     const uint16_t border = selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER;
     const uint16_t iconColor = selected ? SPECTRUM_ACCENT : ST77XX_GRAY;
 
-    // Clear only this card's dirty rectangle before rebuilding it.
-    if (list) tft.fillRect(3, y, 154, cardHeight, ST77XX_BLACK);
-    else tft.fillRect(x, y, cardWidth, cardHeight, ST77XX_BLACK);
-    drawThemedMenuCard(x, y, cardWidth, cardHeight, selected, list,
-                       background, border);
+    if (list) {
+        s_menuCardCanvas.fillScreen(ST77XX_BLACK);
+        const int localX = selected ? 2 : 14;
+        drawThemedMenuCard(localX, 0, cardWidth, cardHeight, selected, list,
+                           background, border, &s_menuCardCanvas);
+        drawMenuIcon(feature.iconId, localX + 20, 10,
+                     iconColor, background, &s_menuCardCanvas);
+        const int labelX = localX + 39;
+        s_menuCardCanvas.setCursor(labelX, 7);
+        s_menuCardCanvas.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, background);
+        s_menuCardCanvas.print(feature.label);
 
-    drawMenuIcon(feature.iconId, list ? x + 20 : x + cardWidth / 2,
-                 list ? y + 10 : y + 8,
-                 iconColor, background);
+        if (featureIndex == 4 && appState.eventCount > 0) {
+            s_menuCardCanvas.fillCircle(localX + cardWidth - 8, 10, 5, SPECTRUM_HIGH);
+            s_menuCardCanvas.setCursor(localX + cardWidth - 11, 7);
+            s_menuCardCanvas.setTextColor(ST77XX_BLACK, SPECTRUM_HIGH);
+            s_menuCardCanvas.print(appState.eventCount);
+        } else if (featureIndex == 5 && appState.loggingEnabled) {
+            s_menuCardCanvas.fillCircle(localX + cardWidth - 8, 10, 4, SPECTRUM_CRITICAL);
+        }
+        tft.drawRGBBitmap(3, y, s_menuCardCanvas.getBuffer(), 154, cardHeight);
+    } else {
+        s_menuCardCanvas.fillScreen(ST77XX_BLACK);
+        drawThemedMenuCard(0, 0, cardWidth, cardHeight, selected, list,
+                           background, border, &s_menuCardCanvas);
+        drawMenuIcon(feature.iconId, cardWidth / 2, 8,
+                     iconColor, background, &s_menuCardCanvas);
+        const int labelX = (cardWidth - static_cast<int>(strlen(feature.label)) * 6) / 2;
+        s_menuCardCanvas.setCursor(labelX, 17);
+        s_menuCardCanvas.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, background);
+        s_menuCardCanvas.print(feature.label);
 
-    const int labelX = list ? x + 39 : x +
-        (cardWidth - static_cast<int>(strlen(feature.label)) * 6) / 2;
-    tft.setCursor(labelX, list ? y + 7 : y + 17);
-    tft.setTextColor(selected ? ST77XX_WHITE : ST77XX_GRAY, background);
-    tft.print(feature.label);
-
-    if (featureIndex == 4 && appState.eventCount > 0) {
-        tft.fillCircle(x + cardWidth - 8, y + 7, 5, SPECTRUM_HIGH);
-        tft.setCursor(x + cardWidth - 11, y + 4);
-        tft.setTextColor(ST77XX_BLACK, SPECTRUM_HIGH);
-        tft.print(appState.eventCount);
-    } else if (featureIndex == 5 && appState.loggingEnabled) {
-        tft.fillCircle(x + cardWidth - 8, y + 7, 4, SPECTRUM_CRITICAL);
+        if (featureIndex == 4 && appState.eventCount > 0) {
+            s_menuCardCanvas.fillCircle(cardWidth - 8, 7, 5, SPECTRUM_HIGH);
+            s_menuCardCanvas.setCursor(cardWidth - 11, 4);
+            s_menuCardCanvas.setTextColor(ST77XX_BLACK, SPECTRUM_HIGH);
+            s_menuCardCanvas.print(appState.eventCount);
+        } else if (featureIndex == 5 && appState.loggingEnabled) {
+            s_menuCardCanvas.fillCircle(cardWidth - 8, 7, 4, SPECTRUM_CRITICAL);
+        }
+        tft.drawRGBBitmap(x, y, s_menuCardCanvas.getBuffer(), cardWidth, cardHeight);
     }
 }
 
@@ -831,21 +839,11 @@ void DisplayManager::redrawMenuItems(int oldSel, int newSel) {
         tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
         const int count = MenuCatalog::pageItemCount(menuPage);
         for (int i = menuScrollOffset; i < min(count, menuScrollOffset + 4); ++i)
-            drawMenuItem(i, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawMenuItem(menuSelection, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
-        }
-        menuTransitionPhase = 3;
+            drawMenuItem(i, i == newSel);
     } else if (oldSel != newSel) {
-        drawMenuItem(oldSel, false);
-        for (menuTransitionPhase = appState.animationsEnabled && appState.menuAnimationEnabled ? 0 : 3;
-             menuTransitionPhase < 4; ++menuTransitionPhase) {
-            drawMenuItem(newSel, true);
-            if (appState.animationsEnabled && appState.menuAnimationEnabled) { delay(appState.scaledAnimationDelay(12)); yield(); }
-        }
         menuTransitionPhase = 3;
+        drawMenuItem(oldSel, false);
+        drawMenuItem(newSel, true);
     }
 }
 

@@ -45,6 +45,11 @@ void DisplayManager::resetDynamicCaches() {
     previousEnvBursts=0xFFFF;previousEnvPeakChannel=0xFF;
     previousEnvBandChannel=0xFF;
     previousSnapshotChannel=0xFF;previousBeforeCapturedMs=previousAfterCapturedMs=0xFFFFFFFF;
+    previousWaterfallHead = 0xFF;
+    previousSurveySweeps = 0xFFFFFFFF;
+    previousEventCount = 0xFF;
+    previousEventHead = 0xFF;
+    lastEventAgeSec = 0;
     envRunningStatusValid = false;
     envLayoutDrawn = false;
     subRecordLayoutDrawn = false;

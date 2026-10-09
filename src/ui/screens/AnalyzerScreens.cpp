@@ -239,9 +239,14 @@ void DisplayManager::renderWaterfallScreen() {
         tft.print("OLD");
         drawModernFooter("U/D BND", "A CLEAR", "B BACK");
         needRedraw = false;
+        previousWaterfallHead = 0xFF;
     }
 
-    tft.fillRect(18, 18, GRAPH_WIDTH, 72, SPECTRUM_CARD_BG);
+    if (previousWaterfallHead == appState.waterfallHead) {
+        return;
+    }
+    previousWaterfallHead = appState.waterfallHead;
+
     const int count = appState.waterfallCount;
     for (int row = 0; row < count; row++) {
         const int source = (appState.waterfallHead - 1 - row + WATERFALL_ROWS) % WATERFALL_ROWS;
@@ -261,7 +266,13 @@ void DisplayManager::renderSurveyScreen() {
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
         drawModernFooter("U/D BND", "A RESET", "B BACK");
         needRedraw = false;
+        previousSurveySweeps = 0xFFFFFFFF;
     }
+
+    if (previousSurveySweeps == appState.surveySweeps) {
+        return;
+    }
+    previousSurveySweeps = appState.surveySweeps;
 
     tft.fillRect(9, 20, 142, 79, SPECTRUM_CARD_BG);
     tft.setCursor(10, 21);
@@ -316,7 +327,19 @@ void DisplayManager::renderEventsScreen() {
         tft.drawRoundRect(5, 17, 150, 86, 4, SPECTRUM_BORDER);
         drawModernFooter("U/D THR", "A CLEAR", "B BACK");
         needRedraw = false;
+        previousEventCount = 0xFF;
+        previousEventHead = 0xFF;
     }
+
+    const unsigned long currentSec = millis() / 1000UL;
+    if (previousEventCount == appState.eventCount &&
+        previousEventHead == appState.eventHead &&
+        currentSec == lastEventAgeSec) {
+        return;
+    }
+    previousEventCount = appState.eventCount;
+    previousEventHead = appState.eventHead;
+    lastEventAgeSec = currentSec;
 
     tft.fillRect(9, 20, 142, 79, SPECTRUM_CARD_BG);
     tft.setCursor(10, 21);

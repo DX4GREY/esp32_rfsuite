@@ -176,6 +176,11 @@ private:
     uint8_t previousSnapshotChannel = 0xFF;
     uint32_t previousBeforeCapturedMs = 0xFFFFFFFF;
     uint32_t previousAfterCapturedMs = 0xFFFFFFFF;
+    uint8_t previousWaterfallHead = 0xFF;
+    uint32_t previousSurveySweeps = 0xFFFFFFFF;
+    uint8_t previousEventCount = 0xFF;
+    uint8_t previousEventHead = 0xFF;
+    unsigned long lastEventAgeSec = 0;
     bool previousEnvRunning = false;
     bool envRunningStatusValid = false;
     bool envLayoutDrawn = false;
@@ -284,10 +289,11 @@ private:
     void drawSpectrumGrid();
     void drawSpectrumBars();
     void drawMenuItem(int index, bool selected);
-    void drawMenuIcon(int index, int centerX, int centerY, uint16_t color, uint16_t background);
+    void drawMenuIcon(int index, int centerX, int centerY, uint16_t color, uint16_t background, Adafruit_GFX* target = nullptr);
     void drawThemedMenuCard(int x, int y, int width, int height,
                             bool selected, bool list,
-                            uint16_t background, uint16_t border);
+                            uint16_t background, uint16_t border,
+                            Adafruit_GFX* target = nullptr);
     void redrawMenuItems(int oldSel, int newSel);
     void resetDynamicCaches();
     void drawModernHeader(const char* title, uint16_t accent, int page = 0, int totalPages = 0);

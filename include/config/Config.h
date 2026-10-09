@@ -71,7 +71,7 @@
 // TFT DISPLAY COLORS (RGB565)
 // =============================================================================
 #ifndef ST77XX_GRAY
-#define ST77XX_GRAY 0x8410
+#define ST77XX_GRAY 0x9CD3
 #endif
 #ifndef ST77XX_DARKGRAY
 #define ST77XX_DARKGRAY 0x39E7

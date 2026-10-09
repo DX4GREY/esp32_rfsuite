@@ -41,6 +41,8 @@ float easeOutCubic(float t) {
 int mixInt(int from, int to, float t) {
     return from + static_cast<int>((to - from) * t);
 }
+
+static GFXcanvas16 s_carouselCanvas(160, 77);
 }
 
 bool updateCarouselMenuUI(DisplayManager& dm) {
@@ -67,28 +69,27 @@ bool updateCarouselMenuUI(DisplayManager& dm) {
         scale = constrain(scale, 58, 100);
         const int width = 29 + (scale - 58) * 31 / 42;
         const int height = 29 + (scale - 58) * 23 / 42;
-        const int centerY = 49;
+        const int centerY = 34;
         const int x = centerX - width / 2;
         const int y = centerY - height / 2;
         const bool selected = scale >= 85;
         const uint16_t background = selected ? SPECTRUM_HEADER_BG : SPECTRUM_CARD_BG;
         const uint16_t edge = selected ? SPECTRUM_ACCENT : SPECTRUM_BORDER;
-        dm.tft.fillRoundRect(x, y, width, height, selected ? 7 : 4, background);
-        dm.tft.drawRoundRect(x, y, width, height, selected ? 7 : 4, edge);
+        s_carouselCanvas.fillRoundRect(x, y, width, height, selected ? 7 : 4, background);
+        s_carouselCanvas.drawRoundRect(x, y, width, height, selected ? 7 : 4, edge);
         if (selected) {
-            dm.tft.drawRoundRect(x + 2, y + 2, width - 4, height - 4, 5, SPECTRUM_GRID);
-            dm.tft.drawCircle(centerX, centerY - 2, 13, SPECTRUM_GRID);
+            s_carouselCanvas.drawRoundRect(x + 2, y + 2, width - 4, height - 4, 5, SPECTRUM_GRID);
+            s_carouselCanvas.drawCircle(centerX, centerY - 2, 13, SPECTRUM_GRID);
         }
         dm.drawMenuIcon(item.icon, centerX, centerY - (selected ? 2 : 0),
-                        selected ? SPECTRUM_ACCENT : ST77XX_GRAY, background);
+                        selected ? SPECTRUM_ACCENT : ST77XX_GRAY, background, &s_carouselCanvas);
     };
 
     auto drawLabel = [&](const char* label) {
-        dm.tft.fillRect(0, 76, 160, 16, ST77XX_BLACK);
         const int width = static_cast<int>(strlen(label)) * 6;
-        dm.tft.setCursor(max(1, (160 - width) / 2), 80);
-        dm.tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-        dm.tft.print(label);
+        s_carouselCanvas.setCursor(max(1, (160 - width) / 2), 65);
+        s_carouselCanvas.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+        s_carouselCanvas.print(label);
     };
 
     auto drawDots = [&](int count, int selected) {
@@ -103,13 +104,14 @@ bool updateCarouselMenuUI(DisplayManager& dm) {
     };
 
     auto drawStatic = [&](CarouselItem* items, int count, int selected) {
-        dm.tft.fillRect(0, 15, 160, 89, ST77XX_BLACK);
+        s_carouselCanvas.fillScreen(ST77XX_BLACK);
         if (count > 1) {
             drawCard(items[wrapIndex(selected - 1, count)], 18, 58);
             drawCard(items[wrapIndex(selected + 1, count)], 142, 58);
         }
         drawCard(items[selected], 80, 100);
         drawLabel(items[selected].label);
+        dm.tft.drawRGBBitmap(0, 15, s_carouselCanvas.getBuffer(), 160, 77);
         drawDots(count, selected);
     };
 
@@ -123,11 +125,11 @@ bool updateCarouselMenuUI(DisplayManager& dm) {
     auto animate = [&](CarouselItem* items, int count, int oldSel, int newSel) {
         const int direction = directionFor(oldSel, newSel, count);
         if (!direction) { drawStatic(items, count, newSel); return; }
-        constexpr int FRAMES = 5;
-        for (int frame = 0; frame <= FRAMES; ++frame) {
+        constexpr int FRAMES = 3;
+        for (int frame = 1; frame <= FRAMES; ++frame) {
             const float raw = static_cast<float>(frame) / FRAMES;
             const float p = easeOutCubic(raw);
-            dm.tft.fillRect(0, 15, 160, 77, ST77XX_BLACK);
+            s_carouselCanvas.fillScreen(ST77XX_BLACK);
 
             const int oldX = mixInt(80, direction > 0 ? 18 : 142, p);
             const int newX = mixInt(direction > 0 ? 142 : 18, 80, p);
@@ -148,10 +150,7 @@ bool updateCarouselMenuUI(DisplayManager& dm) {
             drawCard(items[oldSel], oldX, oldScale);
             drawCard(items[newSel], newX, newScale);
             drawLabel(raw < 0.45f ? items[oldSel].label : items[newSel].label);
-            if (frame != FRAMES) {
-                delay(appState.scaledAnimationDelay(10));
-                yield();
-            }
+            dm.tft.drawRGBBitmap(0, 15, s_carouselCanvas.getBuffer(), 160, 77);
         }
         drawDots(count, newSel);
     };
